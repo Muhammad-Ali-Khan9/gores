@@ -104,7 +104,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           body: Automated release for ${{ github.ref_name }}.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
 
       - name: Upload Linux binary
         uses: softprops/action-gh-release@v1
@@ -115,7 +115,7 @@ jobs:
           asset_name: gores-linux-amd64
           asset_content_type: application/octet-stream
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
 
       - name: Upload macOS binary
         uses: softprops/action-gh-release@v1
@@ -126,7 +126,7 @@ jobs:
           asset_name: gores-darwin-amd64
           asset_content_type: application/octet-stream
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
 
       - name: Upload Windows binary
         uses: softprops/action-gh-release@v1
@@ -137,4 +137,4 @@ jobs:
           asset_name: gores-windows-amd64.exe
           asset_content_type: application/octet-stream
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
