@@ -28,18 +28,32 @@ jobs:
       - name: Check Go version (debug)
         run: go version
 
+      - name: Show environment variables (debug)
+        run: env
+
+      - name: Show current directory and contents (debug)
+        run: |
+          pwd
+          ls -la
+          ls -la ./cmd
+
       - name: Download Go modules
         run: go mod download
 
       - name: Build binary
         run: |
+          echo "Matrix OS: ${{ matrix.os }}"
           OUTPUT_NAME=gores
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             OUTPUT_NAME=gores.exe
           fi
           GOOS=$(echo ${{ matrix.os }} | cut -d'-' -f1)
           GOARCH=amd64
+          echo "Building for GOOS=$GOOS GOARCH=$GOARCH OUTPUT_NAME=$OUTPUT_NAME"
           env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME ./cmd
+
+      - name: List built files (debug)
+        run: ls -la
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
