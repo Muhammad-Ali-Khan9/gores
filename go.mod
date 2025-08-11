@@ -1,4 +1,4 @@
-module go-microservice-boilerplate
+module github.com/Muhammad-Ali-Khan9/go-microservice-boilerplate
 
 go 1.20
 
