@@ -1,0 +1,80 @@
+package {{.Name | lower}}
+
+import (
+	"{{.RootDir}}/pkg/entities"
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+)
+
+type {{.Name | title}}Service struct {
+	db        *gorm.DB
+	model     *entities.{{.Name | title}}
+}
+
+func New{{.Name | title}}Service(db *gorm.DB, model *entities.{{.Name | title}}) *{{.Name | title}}Service {
+	return &{{.Name | title}}Service{
+		db:    db,
+		model: model,
+	}
+}
+
+// GetAll fetches all {{.Name | lower}} records.
+func (s *{{.Name | title}}Service) GetAll(ctx context.Context) ([]entities.{{.Name | title}}, error) {
+	var items []entities.{{.Name | title}}
+	if err := s.db.WithContext(ctx).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// GetByID fetches a single {{.Name | lower}} by ID.
+func (s *{{.Name | title}}Service) GetByID(ctx context.Context, id string) (*entities.{{.Name | title}}, error) {
+	var item entities.{{.Name | title}}
+	if err := s.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// Create inserts a new {{.Name | lower}} record.
+func (s *{{.Name | title}}Service) Create(ctx context.Context, item *entities.{{.Name | title}}) (*entities.{{.Name | title}}, error) {
+	if item.ID == "" {
+		item.ID = uuid.New().String()
+	}
+	item.CreatedAt = time.Now()
+	item.UpdatedAt = time.Now()
+
+	if err := s.db.WithContext(ctx).Create(item).Error; err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
+// Update modifies an existing {{.Name | lower}} record by ID.
+func (s *{{.Name | title}}Service) Update(ctx context.Context, id string, updated *entities.{{.Name | title}}) (*entities.{{.Name | title}}, error) {
+	var existing entities.{{.Name | title}}
+	if err := s.db.WithContext(ctx).First(&existing, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+
+	updated.ID = existing.ID
+	updated.CreatedAt = existing.CreatedAt
+	updated.UpdatedAt = time.Now()
+
+	if err := s.db.WithContext(ctx).Save(updated).Error; err != nil {
+		return nil, err
+	}
+	return updated, nil
+}
+
+// Delete removes a {{.Name | lower}} record by ID.
+func (s *{{.Name | title}}Service) Delete(ctx context.Context, id string) error {
+	if err := s.db.WithContext(ctx).Delete(&entities.{{.Name | title}}{}, "id = ?", id).Error; err != nil {
+		return err
+	}
+	return nil
+}

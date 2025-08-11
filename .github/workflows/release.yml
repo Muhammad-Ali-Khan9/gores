@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v1.0.0, v1.2.3, etc.
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        go-version: [1.20]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Build binary
+        run: |
+          OUTPUT_NAME=gores
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            OUTPUT_NAME=gores.exe
+          fi
+          GOOS=$(echo ${{ matrix.os }} | cut -d'-' -f1)
+          GOARCH=amd64
+          env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME ./cmd
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.os }}-binary
+          path: |
+            gores
+            gores.exe
+
+  release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: ubuntu-latest-binary
+          path: release
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: macos-latest-binary
+          path: release
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-latest-binary
+          path: release
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: Automated release for ${{ github.ref_name }}.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux binary
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: gores-linux-amd64
+          asset_path: release/gores
+          asset_name: gores-linux-amd64
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS binary
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: gores-darwin-amd64
+          asset_path: release/gores
+          asset_name: gores-darwin-amd64
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows binary
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: gores-windows-amd64.exe
+          asset_path: release/gores.exe
+          asset_name: gores-windows-amd64.exe
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,81 @@
+package {{.Name | lower}}
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+
+	"github.com/gorilla/mux"
+)
+
+// {{.Name | title}}Controller handles HTTP requests for {{.Name | title}} operations.
+type {{.Name | title}}Controller struct {
+	service *{{.Name | title}}Service
+}
+
+// New{{.Name | title}}Controller creates a new {{.Name | title}}Controller with the given service.
+func New{{.Name | title}}Controller(service *{{.Name | title}}Service) *{{.Name | title}}Controller {
+	return &{{.Name | title}}Controller{service: service}
+}
+
+// GetAll handles GET /{{.Name | lower}}
+func (c *{{.Name | title}}Controller) GetAll(w http.ResponseWriter, r *http.Request) {
+	items, err := c.service.GetAll(context.Background())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(items)
+}
+
+// GetByID handles GET /{{.Name | lower}}/{id}
+func (c *{{.Name | title}}Controller) GetByID(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	item, err := c.service.GetByID(context.Background(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	json.NewEncoder(w).Encode(item)
+}
+
+// Create handles POST /{{.Name | lower}}
+func (c *{{.Name | title}}Controller) Create(w http.ResponseWriter, r *http.Request) {
+	var item entities.{{.Name | title}}
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	created, err := c.service.Create(context.Background(), &item)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(created)
+}
+
+// Update handles PUT /{{.Name | lower}}/{id}
+func (c *{{.Name | title}}Controller) Update(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	var item entities.{{.Name | title}}
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	updated, err := c.service.Update(context.Background(), id, &item)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(updated)
+}
+
+// Delete handles DELETE /{{.Name | lower}}/{id}
+func (c *{{.Name | title}}Controller) Delete(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if err := c.service.Delete(context.Background(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

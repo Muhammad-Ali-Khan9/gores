@@ -1,0 +1,16 @@
+package {{.Name | lower}}
+
+import (
+	"github.com/gorilla/mux"
+)
+
+// Register{{.Name | title}}Routes registers all {{.Name | lower}}-related HTTP routes.
+func Register{{.Name | title}}Routes(r *mux.Router, controller *{{.Name | title}}Controller) {
+	basePath := "/{{.Name | lower}}s"
+
+	r.HandleFunc(basePath, controller.GetAll).Methods("GET")
+	r.HandleFunc(basePath+"/{id}", controller.GetByID).Methods("GET")
+	r.HandleFunc(basePath, controller.Create).Methods("POST")
+	r.HandleFunc(basePath+"/{id}", controller.Update).Methods("PUT")
+	r.HandleFunc(basePath+"/{id}", controller.Delete).Methods("DELETE")
+}

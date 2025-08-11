@@ -1,0 +1,56 @@
+package postgres
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+func New() (*gorm.DB, error) {
+	// Load environment variables from .env
+	if os.Getenv("ENV") == "production" {
+		_ = godotenv.Load() // Load default .env
+	} else {
+		_ = godotenv.Load("../../../.env") // Load .env from root in dev
+	}
+
+	host := os.Getenv("POSTGRES_HOST")
+	port := os.Getenv("POSTGRES_PORT")
+	user := os.Getenv("POSTGRES_USER")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	dbname := os.Getenv("POSTGRES_DB")
+	sslmode := os.Getenv("POSTGRES_SSLMODE")
+
+	fmt.Printf("[DB DEBUG] POSTGRES_HOST=%s\n", host)
+	fmt.Printf("[DB DEBUG] POSTGRES_PORT=%s\n", port)
+	fmt.Printf("[DB DEBUG] POSTGRES_USER=%s\n", user)
+	fmt.Printf("[DB DEBUG] POSTGRES_PASSWORD is set: %v\n", password != "")
+	fmt.Printf("[DB DEBUG] POSTGRES_DB=%s\n", dbname)
+	fmt.Printf("[DB DEBUG] POSTGRES_SSLMODE=%s\n", sslmode)
+
+	// DSN connection string
+	dsn := fmt.Sprintf(
+		"postgresql://%s:%s@%s:%s/%s?sslmode=%s",
+		user, password, host, port, dbname, sslmode,
+	)
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sql.DB from gorm: %w", err)
+	}
+
+	// Test the connection
+	if err := sqlDB.Ping(); err != nil {
+		return nil, fmt.Errorf("ping failed: %w", err)
+	}
+
+	return db, nil
+}

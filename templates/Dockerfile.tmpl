@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+
+# --- Build stage ---
+FROM golang:1.24-alpine AS builder
+WORKDIR /app
+
+# Copy the service go.mod and go.sum
+COPY services/{{.Name}}/go.mod services/{{.Name}}/go.sum ./
+# Copy unified pkg go.mod and go.sum
+COPY pkg/go.mod pkg/go.sum ./pkg/
+RUN go mod download
+
+# Copy shared and service code
+COPY pkg ./pkg
+COPY services/{{.Name}}/src ./src
+
+# Build the service binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o {{.Name}}-service ./src/cmd
+
+# --- Run stage ---
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/{{.Name}}-service ./{{.Name}}-service
+COPY --from=builder /app/pkg ./pkg
+COPY .env .env
+
+EXPOSE {{.Port}}
+ENV PORT={{.Port}}
+CMD ["./{{.Name}}-service"]
