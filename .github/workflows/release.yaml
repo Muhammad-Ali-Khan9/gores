@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     branches:
-      - main     # Also run on commits pushed to main branch
+      - main     # Also runs on commits pushed to main branch
+    tags:
+      - 'v*.*.*'  # Also trigger on version tags like v1.0.0, etc.
 
 jobs:
   build-and-release:
@@ -22,6 +24,12 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go-version }}
+
+      - name: Check Go version (debug)
+        run: go version
+
+      - name: Download Go modules
+        run: go mod download
 
       - name: Build binary
         run: |
@@ -97,7 +105,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Uploade Windows binary
+      - name: Upload Windows binary
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
