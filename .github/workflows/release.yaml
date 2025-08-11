@@ -47,7 +47,18 @@ jobs:
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             OUTPUT_NAME=gores.exe
           fi
-          GOOS=$(echo ${{ matrix.os }} | cut -d'-' -f1)
+
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            GOOS=linux
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            GOOS=darwin
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            GOOS=windows
+          else
+            echo "Unsupported OS: ${{ matrix.os }}"
+            exit 1
+          fi
+
           GOARCH=amd64
           echo "Building for GOOS=$GOOS GOARCH=$GOARCH OUTPUT_NAME=$OUTPUT_NAME"
           env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME ./cmd
