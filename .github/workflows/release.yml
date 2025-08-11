@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v3
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go-version }}
 
@@ -34,7 +34,7 @@ jobs:
           env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME ./cmd
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-binary
           path: |
@@ -47,13 +47,13 @@ jobs:
 
     steps:
       - name: Download Linux artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           name: ubuntu-latest-binary
           path: release
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v4
         with:
           name: macos-latest-binary
           path: release
