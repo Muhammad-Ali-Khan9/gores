@@ -97,7 +97,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Uploaded Windows binary
+      - name: Uploade Windows binary
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
