@@ -46,7 +46,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 If you have Go installed, you can directly install the CLI tool using:
 
 ```bash
-go install github.com/your-username/go-microservice-boilerplate/cmd@latest
+go install github.com/Muhammad-Ali-Khan9/gores/cmd@latest
 ```
 
 This will compile and install the gores executable in your $GOPATH/bin or $HOME/go/bin directory.
