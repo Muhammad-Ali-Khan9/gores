@@ -9,48 +9,40 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         go-version: ["1.20"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      # Checkout repo
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Go
-      - name: Set up Go ${{ matrix.go-version }}
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
 
-      # Create release directory
       - name: Create release dir
         run: mkdir -p release
 
-      # Build Linux binary
-      - name: Build Linux
-        run: GOOS=linux GOARCH=amd64 go build -o release/gores-linux-amd64 main.go
+      - name: Build binary
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            GOOS=linux GOARCH=amd64 go build -o release/gores-linux-amd64 main.go
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            GOOS=darwin GOARCH=amd64 go build -o release/gores-darwin-amd64 main.go
+          else
+            GOOS=windows GOARCH=amd64 go build -o release/gores-windows-amd64.exe main.go
+          fi
 
-      # Build macOS binary
-      - name: Build macOS
-        run: GOOS=darwin GOARCH=amd64 go build -o release/gores-darwin-amd64 main.go
-
-      # Build Windows binary
-      - name: Build Windows
-        run: GOOS=windows GOARCH=amd64 go build -o release/gores-windows-amd64.exe main.go
-
-      # Create GitHub Release
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            release/gores-linux-amd64
-            release/gores-darwin-amd64
-            release/gores-windows-amd64.exe
+          name: ${{ matrix.os }}-binary
+          path: release/*
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -82,6 +74,10 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: 🚀 Go Microservice Boilerplate ${{ github.ref_name }}
+          files: |
+            release/gores-linux-amd64
+            release/gores-darwin-amd64
+            release/gores-windows-amd64.exe
           body: |
             ## 📦 Go Microservice Boilerplate — ${{ github.ref_name }}
 
@@ -91,7 +87,7 @@ jobs:
             - **Linux (x86_64)** → [gores-linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-linux-amd64)
             - **macOS (x86_64)** → [gores-darwin-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-darwin-amd64)
             - **Windows (x86_64)** → [gores-windows-amd64.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-windows-amd64.exe)
-
+            
             #### Linux / macOS
             ```bash
             curl -L -o gores https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-linux-amd64
@@ -138,35 +134,5 @@ jobs:
 
             ---
             _Built automatically via GitHub Actions._
-        env:
-          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
-
-      - name: Upload Linux binary
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          asset_path: release/gores
-          asset_name: gores-linux-amd64
-          asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
-
-      - name: Upload macOS binary
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          asset_path: release/gores
-          asset_name: gores-darwin-amd64
-          asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.MY_PAT }}
-
-      - name: Upload Windows binary
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          asset_path: release/gores.exe
-          asset_name: gores-windows-amd64.exe
-          asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.MY_PAT }}
