@@ -75,7 +75,7 @@ func getNextAvailablePort(start int, used *UsedPorts) (int, error) {
         l.Close()
         return port, nil
     }
-    return 0, fmt.Errorf("no available ports found starting at %d", start)
+    return 0, fmt.Errorf("no available port found starting at %d", start)
 }
 
 func readAndIncrementPortWithUsed(start int, nextPortFile, usedPortsFile string) (int, error) {
