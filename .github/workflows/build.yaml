@@ -1,0 +1,73 @@
+name: Build and Upload Artifacts
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        go-version: ["1.20"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Check Go version (debug)
+        run: go version
+
+      - name: Show environment variables (debug)
+        run: env
+
+      - name: Show current directory and contents (debug)
+        run: |
+          pwd
+          ls -la
+          ls -la ./cmd
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          echo "Matrix OS: ${{ matrix.os }}"
+          OUTPUT_NAME=gores
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            OUTPUT_NAME=gores.exe
+          fi
+
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            GOOS=linux
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            GOOS=darwin
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            GOOS=windows
+          else
+            echo "Unsupported OS: ${{ matrix.os }}"
+            exit 1
+          fi
+
+          GOARCH=amd64
+          echo "Building for GOOS=$GOOS GOARCH=$GOARCH OUTPUT_NAME=$OUTPUT_NAME"
+          env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME ./cmd
+
+      - name: List built files (debug)
+        run: ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-binary
+          path: |
+            gores
+            gores.exe
