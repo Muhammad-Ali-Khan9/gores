@@ -51,6 +51,24 @@ jobs:
             release/gores-linux-amd64
             release/gores-darwin-amd64
             release/gores-windows-amd64.exe
+      
+            - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gores-linux-amd64
+          path: release/gores-linux-amd64
+
+      - name: Upload macOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gores-darwin-amd64
+          path: release/gores-darwin-amd64
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: gores-windows-amd64.exe
+          path: release/gores-windows-amd64.exe
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
