@@ -94,11 +94,4 @@ gores generate [service-name] [port]
  - service-name: The name of the microservice to generate (required).
  - port: (Optional) port number. If omitted, the CLI automatically assigns the next available port starting from 8080.
 
- On running the command, you will be prompted to select the API type (currently only RESTful is supported):
- ```bash
- Select API type to generate:
-1) Restful
-2) GraphQL
-3) gRPC
-Enter choice (1-3):
 ```
