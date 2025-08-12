@@ -13,21 +13,6 @@ This tool supports generating RESTful microservices with plans to extend support
 
 ---
 
-## License
-
-This project is licensed under the [Apache License 2.0](LICENSE).  
-You are free to use, modify, and distribute this software — including for commercial purposes — under the terms of the Apache License 2.0.
-
-
----
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report issues, request features, and submit pull requests.
-
-
----
-
 ## Features
 
 - Generate boilerplate code for Go microservices with a clean architecture  
@@ -36,6 +21,62 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 - CLI-based interaction powered by [Cobra](https://github.com/spf13/cobra)  
 - Cross-platform support with pre-built binaries for Linux, macOS, and Windows  
 - Automated GitHub Actions workflow for seamless releases
+
+---
+
+## What does gores generate for you?
+
+When you run `gores generate [service-name] [port]`, it creates a complete, production-ready microservice skeleton with the following features:
+
+### 1. Clean Project Structure
+
+- **`cmd/main.go`** — Entrypoint that bootstraps the server
+- **`internal/`** — Internal packages for routers, controllers, and services following clean architecture
+- **`pkg/`** — Shared packages for entities, database connection, middleware, and utilities
+
+### 2. Environment-aware Configuration
+
+- Loads environment variables from `.env` files using [`godotenv`](https://github.com/joho/godotenv)
+- Supports different `.env` loading paths for development and production environments
+
+### 3. PostgreSQL Integration via GORM
+
+- Database connection initialized using GORM ORM
+- Reads database config (host, port, user, password, SSL mode) from environment variables
+- Connection health checked on startup
+- Graceful shutdown closes DB connection properly
+
+### 4. HTTP Server with Gorilla Mux
+
+- Sets up HTTP routing with [`gorilla/mux`](https://github.com/gorilla/mux)
+- Automatically registers user-defined routes and controllers
+- Includes CORS middleware to handle cross-origin requests and OPTIONS preflight
+
+### 5. Graceful Shutdown
+
+- Listens for system signals (`SIGINT`, `SIGTERM`)
+- Shuts down HTTP server and closes database connections cleanly to avoid resource leaks
+
+### 6. Docker Multi-stage Build
+
+- Optimized Dockerfile that compiles a static Go binary in a lightweight Alpine image
+- Copies all necessary source and shared packages for reproducible builds
+- Exposes and configures service port via environment variable
+
+### 7. Ready-to-use REST, GraphQL, or gRPC API
+
+- Choose API type interactively during generation
+- Generates boilerplate for chosen API style with controllers and routes
+
+---
+
+## Benefits
+
+- **Save Time:** Instantly scaffold all the repetitive setup code
+- **Best Practices:** Follow idiomatic Go conventions and clean architecture
+- **Extendable:** Easily add your business logic in services and controllers
+- **Environment Friendly:** Automatically handles `.env` loading per environment
+- **Production Ready:** Built-in graceful shutdown, logging, and Docker support
 
 ---
 
@@ -94,4 +135,19 @@ gores generate [service-name] [port]
  - service-name: The name of the microservice to generate (required).
  - port: (Optional) port number. If omitted, the CLI automatically assigns the next available port starting from 8080.
 
-```
+---
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).  
+You are free to use, modify, and distribute this software — including for commercial purposes — under the terms of the Apache License 2.0.
+
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report issues, request features, and submit pull requests.
+
+
+---
