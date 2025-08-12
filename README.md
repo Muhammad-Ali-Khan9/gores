@@ -2,7 +2,7 @@
 
 [![Go](https://img.shields.io/badge/go-1.20-blue.svg)](https://golang.org)
 [![GitHub Release](https://img.shields.io/github/v/release/Muhammad-Ali-Khan9/gores)](https://github.com/Muhammad-Ali-Khan9/gores/releases)
-[![License](https://img.shields.io/github/license/Muhammad-Ali-Khan9/gores)](LICENSE)
+[![License](https://img.shields.io/github/license/Muhammad-Ali-Khan9/gores)](LICENSE)  
 
 ---
 
@@ -16,8 +16,8 @@ This tool supports generating RESTful microservices with plans to extend support
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).  
-You are free to use, modify, and distribute this software — including for commercial purposes — under the terms of the MIT License.
+This project is licensed under the [Apache License 2.0](LICENSE).  
+You are free to use, modify, and distribute this software — including for commercial purposes — under the terms of the Apache License 2.0.
 
 
 ---
