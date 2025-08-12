@@ -9,10 +9,14 @@ import (
 	"text/template"
 	"net"
 	"strconv"
+	"embed"
 
 	"github.com/spf13/cobra"
 	"encoding/json"
 )
+
+//go:embed templates/*
+var templatesFS embed.FS
 
 type PortSequence struct {
 	LastPort int `json:"last_port"`
@@ -223,7 +227,7 @@ func createSharedPkg() error {
 	if _, err := os.Stat(pkgGoModPath); os.IsNotExist(err) {
 		fmt.Println("Creating pkg/go.mod...")
 		pkgGoModContent := []byte("module pkg\n\ngo 1.20\n") // customize if needed
-		if err := ioutil.WriteFile(pkgGoModPath, pkgGoModContent, 0644); err != nil {
+		if err := os.WriteFile(pkgGoModPath, pkgGoModContent, 0644); err != nil {
 			return fmt.Errorf("failed to create pkg/go.mod: %w", err)
 		}
 	} else {
@@ -234,7 +238,7 @@ func createSharedPkg() error {
 	pkgGoSumPath := filepath.Join(pkgPath, "go.sum")
 	if _, err := os.Stat(pkgGoSumPath); os.IsNotExist(err) {
 		fmt.Println("Creating pkg/go.sum...")
-		if err := ioutil.WriteFile(pkgGoSumPath, []byte(""), 0644); err != nil {
+		if err := os.WriteFile(pkgGoSumPath, []byte(""), 0644); err != nil {
 			return fmt.Errorf("failed to create pkg/go.sum: %w", err)
 		}
 	} else {
@@ -252,7 +256,7 @@ func createSharedPkg() error {
 		fmt.Println("pkg/entities/ folder already exists, skipping creation.")
 	}
 
-	// Create pkg/database folder and connection.go from template
+	// Create pkg/database folder and connection.go from embedded template
 	dbPkgPath := filepath.Join(pkgPath, "database")
 	if _, err := os.Stat(dbPkgPath); os.IsNotExist(err) {
 		fmt.Println("Creating pkg/database folder...")
@@ -263,11 +267,9 @@ func createSharedPkg() error {
 		fmt.Println("pkg/database folder already exists, skipping creation.")
 	}
 
-	dbTemplatePath := filepath.Join("templates", "database_connection.tmpl")
 	dbOutputPath := filepath.Join(dbPkgPath, "connection.go")
-
 	if _, err := os.Stat(dbOutputPath); os.IsNotExist(err) {
-		dbContent, err := ioutil.ReadFile(dbTemplatePath)
+		dbContent, err := templatesFS.ReadFile("templates/database_connection.tmpl")
 		if err != nil {
 			return fmt.Errorf("failed to read database connection template: %w", err)
 		}
@@ -281,9 +283,9 @@ func createSharedPkg() error {
 		if err != nil {
 			return fmt.Errorf("failed to create file %s: %w", dbOutputPath, err)
 		}
+		defer dbFile.Close()
 
 		err = dbTemplate.Execute(dbFile, nil) // no vars needed
-		dbFile.Close()
 		if err != nil {
 			return fmt.Errorf("failed to execute database connection template: %w", err)
 		}
@@ -291,7 +293,7 @@ func createSharedPkg() error {
 		fmt.Println("pkg/database/connection.go already exists, skipping creation.")
 	}
 
-	// Create pkg/http folder and middleware.go from template
+	// Create pkg/http folder and middleware.go from embedded template
 	httpPkgPath := filepath.Join(pkgPath, "http")
 	if _, err := os.Stat(httpPkgPath); os.IsNotExist(err) {
 		fmt.Println("Creating pkg/http folder...")
@@ -302,11 +304,9 @@ func createSharedPkg() error {
 		fmt.Println("pkg/http folder already exists, skipping creation.")
 	}
 
-	middlewareTemplatePath := filepath.Join("templates", "middleware.tmpl")
 	middlewareOutputPath := filepath.Join(httpPkgPath, "middleware.go")
-
 	if _, err := os.Stat(middlewareOutputPath); os.IsNotExist(err) {
-		middlewareContent, err := ioutil.ReadFile(middlewareTemplatePath)
+		middlewareContent, err := templatesFS.ReadFile("templates/middleware.tmpl")
 		if err != nil {
 			return fmt.Errorf("failed to read middleware template: %w", err)
 		}
@@ -320,9 +320,9 @@ func createSharedPkg() error {
 		if err != nil {
 			return fmt.Errorf("failed to create file %s: %w", middlewareOutputPath, err)
 		}
+		defer middlewareFile.Close()
 
 		err = middlewareTemplate.Execute(middlewareFile, nil) // no vars
-		middlewareFile.Close()
 		if err != nil {
 			return fmt.Errorf("failed to execute middleware template: %w", err)
 		}
@@ -333,7 +333,7 @@ func createSharedPkg() error {
 	return nil
 }
 
-// createMicroservice scaffolds microservice folders and files from templates
+// createMicroservice scaffolds microservice folders and files from embedded templates
 func createMicroservice(name, port string) error {
 	basePath := filepath.Join(name, "src")
 	subFolders := []string{
@@ -391,15 +391,14 @@ func createMicroservice(name, port string) error {
 	}
 
 	for i, tmplFile := range templates {
-		tmplPath := filepath.Join("templates", tmplFile)
-		content, err := ioutil.ReadFile(tmplPath)
+		content, err := templatesFS.ReadFile("templates/" + tmplFile)
 		if err != nil {
-			return fmt.Errorf("failed to read template %s: %w", tmplPath, err)
+			return fmt.Errorf("failed to read template %s: %w", tmplFile, err)
 		}
 
 		t, err := template.New(tmplFile).Funcs(funcMap).Parse(string(content))
 		if err != nil {
-			return fmt.Errorf("failed to parse template %s: %w", tmplPath, err)
+			return fmt.Errorf("failed to parse template %s: %w", tmplFile, err)
 		}
 
 		f, err := os.Create(outputFiles[i])
@@ -417,7 +416,7 @@ func createMicroservice(name, port string) error {
 	// Create empty go.sum file (not templated)
 	goSumPath := filepath.Join(basePath, "go.sum")
 	if _, err := os.Stat(goSumPath); os.IsNotExist(err) {
-		if err := ioutil.WriteFile(goSumPath, []byte(""), 0644); err != nil {
+		if err := os.WriteFile(goSumPath, []byte(""), 0644); err != nil {
 			return fmt.Errorf("failed to create go.sum: %w", err)
 		}
 	}
