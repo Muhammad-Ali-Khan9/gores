@@ -328,10 +328,8 @@ func createMicroservice(name, port string) error {
 		"router.tmpl",
 		"controller.tmpl",
 		"service.tmpl",
-		"entity_pkg.tmpl",
 		"go.mod.tmpl",
 		"Dockerfile.tmpl",
-		"entity_pkg.tmpl",
 	}
 
 	outputFiles := []string{
@@ -339,10 +337,8 @@ func createMicroservice(name, port string) error {
 		filepath.Join(basePath, "internal", "router.go"),
 		filepath.Join(basePath, "internal", "controller.go"),
 		filepath.Join(basePath, "internal", "service.go"),
-		filepath.Join(basePath, "internal", "entity.go"),
 		filepath.Join(basePath, "go.mod"),
 		filepath.Join(basePath, "Dockerfile"),
-		filepath.Join("pkg", "entities", strings.ToLower(name)+"_entity.go"),
 	}
 
 	funcMap := template.FuncMap{
