@@ -1,14 +1,68 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Build and Upload Artifacts"]
-    types:
-      - completed
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v1.0.0
 
 jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        go-version: ["1.20"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          echo "Matrix OS: ${{ matrix.os }}"
+          OUTPUT_NAME=gores
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            OUTPUT_NAME=gores.exe
+          fi
+
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            GOOS=linux
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            GOOS=darwin
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            GOOS=windows
+          else
+            echo "Unsupported OS: ${{ matrix.os }}"
+            exit 1
+          fi
+
+          GOARCH=amd64
+          echo "Building for GOOS=$GOOS GOARCH=$GOARCH OUTPUT_NAME=$OUTPUT_NAME"
+          env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME ./cmd
+      
+      - name: List built files (debug)
+        run: ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-binary
+          path: |
+            gores
+            gores.exe
+
   release:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-release
     runs-on: ubuntu-latest
 
     steps:
@@ -34,16 +88,71 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.workflow_run.head_commit.message }}
-          name: Release ${{ github.event.workflow_run.head_commit.message }}
-          body: Automated release.
+          tag_name: ${{ github.ref_name }}
+          name: 🚀 Go Microservice Boilerplate ${{ github.ref_name }}
+          body: |
+            ## 📦 Go Microservice Boilerplate — ${{ github.ref_name }}
+
+            Precompiled binaries are available for **Linux**, **macOS**, and **Windows**.
+
+            ### 🔽 1. Download Binaries
+            - **Linux (x86_64)** → [gores-linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-linux-amd64)
+            - **macOS (x86_64)** → [gores-darwin-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-darwin-amd64)
+            - **Windows (x86_64)** → [gores-windows-amd64.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-windows-amd64.exe)
+
+            #### Linux / macOS
+            ```bash
+            curl -L -o gores https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-linux-amd64
+            chmod +x gores
+            ./gores
+            ```
+
+            #### Windows (PowerShell)
+            ```powershell
+            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gores-windows-amd64.exe" -OutFile "gores.exe"
+            .\gores.exe
+            ```
+
+            ---
+
+            ### 💻 2. Install via `go install` (Go 1.17+)
+            ```bash
+            go install github.com/${{ github.repository }}@${{ github.ref_name }}
+            ```
+
+            This will install the binary into your `$GOPATH/bin` or `$HOME/go/bin`.
+
+            ---
+
+            ### 📥 3. Install via `go get` (older Go versions)
+            ```bash
+            go get github.com/${{ github.repository }}@${{ github.ref_name }}
+            ```
+
+            ---
+
+            ### 🛠 4. Build from Source
+            ```bash
+            git clone https://github.com/${{ github.repository }}.git
+            cd $(basename $_ .git)
+            go mod tidy
+            go build -o gores ./cmd
+            ```
+
+            ---
+
+            ### 📚 Documentation
+            For full docs and usage examples, see [README.md](https://github.com/${{ github.repository }}#readme)
+
+            ---
+            _Built automatically via GitHub Actions._
         env:
           GITHUB_TOKEN: ${{ secrets.MY_PAT }}
 
       - name: Upload Linux binary
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.workflow_run.head_commit.message }}
+          tag_name: ${{ github.ref_name }}
           asset_path: release/gores
           asset_name: gores-linux-amd64
           asset_content_type: application/octet-stream
@@ -53,7 +162,7 @@ jobs:
       - name: Upload macOS binary
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.workflow_run.head_commit.message }}
+          tag_name: ${{ github.ref_name }}
           asset_path: release/gores
           asset_name: gores-darwin-amd64
           asset_content_type: application/octet-stream
@@ -63,7 +172,7 @@ jobs:
       - name: Upload Windows binary
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.workflow_run.head_commit.message }}
+          tag_name: ${{ github.ref_name }}
           asset_path: release/gores.exe
           asset_name: gores-windows-amd64.exe
           asset_content_type: application/octet-stream
