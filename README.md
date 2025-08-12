@@ -1,4 +1,4 @@
-# Go Microservice framework
+# gores - the Go Microservice framework
 
 [![Go](https://img.shields.io/badge/go-1.20-blue.svg)](https://golang.org)
 [![GitHub Release](https://img.shields.io/github/v/release/Muhammad-Ali-Khan9/gores)](https://github.com/Muhammad-Ali-Khan9/gores/releases)  
