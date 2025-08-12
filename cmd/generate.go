@@ -149,19 +149,6 @@ var generateCmd = &cobra.Command{
     RunE: func(cmd *cobra.Command, args []string) error {
         serviceName := args[0]
 
-        // Choose API type
-        fmt.Println("Select API type to generate:")
-        fmt.Println("1) Restful")
-        fmt.Println("2) GraphQL")
-        fmt.Println("3) gRPC")
-        fmt.Print("Enter choice (1-3): ")
-
-        var choice int
-        _, err := fmt.Scan(&choice)
-        if err != nil {
-            return fmt.Errorf("failed to read input: %w", err)
-        }
-
         var port string
         if len(args) > 1 && args[1] != "" {
             port = args[1]
@@ -175,19 +162,8 @@ var generateCmd = &cobra.Command{
             }
             port = strconv.Itoa(p)
         }
-
-        switch choice {
-        case 1:
             return generateService(serviceName, port) // Your Restful generator
-        case 2:
-            fmt.Println("GraphQL generation not implemented yet.")
-            return nil
-        case 3:
-            fmt.Println("gRPC generation not implemented yet.")
-            return nil
-        default:
-            return fmt.Errorf("invalid choice")
-        }
+
     },
 }
 
