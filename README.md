@@ -1,16 +1,31 @@
 # Go Microservice Boilerplate CLI
 
 [![Go](https://img.shields.io/badge/go-1.20-blue.svg)](https://golang.org)
-[![GitHub Release](https://img.shields.io/github/v/release/your-username/go-microservice-boilerplate)](https://github.com/your-username/go-microservice-boilerplate/releases)
-[![License](https://img.shields.io/github/license/your-username/go-microservice-boilerplate)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/your-username/gores)](https://github.com/your-username/go-microservice-boilerplate/releases)
+[![License](https://img.shields.io/github/license/your-username/gores)](LICENSE)
 
 ---
 
 ## Introduction
 
-**Go Microservice Boilerplate CLI** is a command-line tool designed to rapidly generate microservice boilerplate code for Go backends. It scaffolds a production-ready project structure including routers, controllers, services, entities, Dockerfiles, and essential configuration files. The generated services follow best practices for modular and maintainable microservice development.
+**Go Microservice framework** is a command-line tool designed to rapidly generate microservice boilerplate code for Go backends. It scaffolds a production-ready project structure including routers, controllers, services, entities, Dockerfiles, and essential configuration files. The generated services follow best practices for modular and maintainable microservice development.
 
 This tool supports generating RESTful microservices with plans to extend support for GraphQL and gRPC APIs.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).  
+You are free to use, modify, and distribute this software — including for commercial purposes — under the terms of the MIT License.
+
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to report issues, request features, and submit pull requests.
+
 
 ---
 
