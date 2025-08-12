@@ -1,8 +1,11 @@
-module github.com/Muhammad-Ali-Khan9/go-microservice-boilerplate
+module github.com/Muhammad-Ali-Khan9/gores
 
 go 1.20
 
-require github.com/spf13/cobra v1.7.0
+require (
+	github.com/Muhammad-Ali-Khan9/go-microservice-boilerplate v1.0.17
+	github.com/spf13/cobra v1.7.0
+)
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
