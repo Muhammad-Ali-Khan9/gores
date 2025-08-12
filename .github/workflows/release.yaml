@@ -8,57 +8,46 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         go-version: ["1.20"]
-        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
+      # Checkout repo
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
+      # Set up Go
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Download Go modules
-        run: go mod download
+      # Create release directory
+      - name: Create release dir
+        run: mkdir -p release
 
-      - name: Build binary
-        run: |
-          echo "Matrix OS: ${{ matrix.os }}"
-          OUTPUT_NAME=gores
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            OUTPUT_NAME=gores.exe
-          fi
+      # Build Linux binary
+      - name: Build Linux
+        run: GOOS=linux GOARCH=amd64 go build -o release/gores-linux-amd64 main.go
 
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            GOOS=linux
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            GOOS=darwin
-          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            GOOS=windows
-          else
-            echo "Unsupported OS: ${{ matrix.os }}"
-            exit 1
-          fi
+      # Build macOS binary
+      - name: Build macOS
+        run: GOOS=darwin GOARCH=amd64 go build -o release/gores-darwin-amd64 main.go
 
-          GOARCH=amd64
-          echo "Building for GOOS=$GOOS GOARCH=$GOARCH OUTPUT_NAME=$OUTPUT_NAME"
-          env GOOS=$GOOS GOARCH=$GOARCH go build -o $OUTPUT_NAME ./cmd
-      
-      - name: List built files (debug)
-        run: ls -la
+      # Build Windows binary
+      - name: Build Windows
+        run: GOOS=windows GOARCH=amd64 go build -o release/gores-windows-amd64.exe main.go
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      # Create GitHub Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: ${{ matrix.os }}-binary
-          path: |
-            gores
-            gores.exe
+          tag_name: ${{ github.ref_name }}
+          files: |
+            release/gores-linux-amd64
+            release/gores-darwin-amd64
+            release/gores-windows-amd64.exe
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
