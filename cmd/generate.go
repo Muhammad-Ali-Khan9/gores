@@ -15,160 +15,258 @@ import (
 	"encoding/json"
 )
 
+type CustomError struct {
+    Err error
+}
+
+func (e *CustomError) Error() string {
+    return e.Err.Error()
+}
+
 //go:embed templates/*
 var templatesFS embed.FS
 
-type PortSequence struct {
-	LastPort int `json:"last_port"`
+// PortInfo represents a single entry in the used ports file.
+type PortInfo struct {
+	Port    int    `json:"port"`
+	Service string `json:"service"`
 }
 
+// UsedPorts represents the entire used ports file content.
 type UsedPorts struct {
-	Ports []int `json:"used_ports"`
+	Ports []PortInfo `json:"used_ports"`
 }
 
+// serviceExists checks if a directory for the service already exists.
+func serviceExists(serviceName string) bool {
+    // os.Stat gets file info. If the file doesn't exist, it returns a specific error.
+    _, err := os.Stat(serviceName)
+    return !os.IsNotExist(err)
+}
+
+// readUsedPorts reads the used ports from a JSON file.
 func readUsedPorts(filename string) (*UsedPorts, error) {
-    data := &UsedPorts{}
+	data := &UsedPorts{}
 
-    content, err := ioutil.ReadFile(filename)
-    if err != nil {
-        if os.IsNotExist(err) {
-            // File doesn't exist, return empty UsedPorts
-            return data, nil
-        }
-        return nil, err
-    }
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return empty UsedPorts
+			return data, nil
+		}
+		return nil, err
+	}
 
-    err = json.Unmarshal(content, data)
-    if err != nil {
-        return nil, err
-    }
-    return data, nil
+	err = json.Unmarshal(content, data)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
+// writeUsedPorts writes the used ports data to a JSON file.
 func writeUsedPorts(filename string, data *UsedPorts) error {
-    bytes, err := json.MarshalIndent(data, "", "  ")
-    if err != nil {
-        return err
-    }
-    return ioutil.WriteFile(filename, bytes, 0644)
+	bytes, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, bytes, 0644)
 }
 
-// Check if port is in UsedPorts.Ports slice
+// isPortUsed checks if a port is in the UsedPorts slice.
 func isPortUsed(used *UsedPorts, port int) bool {
-    for _, p := range used.Ports {
-        if p == port {
-            return true
-        }
-    }
-    return false
+	for _, p := range used.Ports {
+		if p.Port == port {
+			return true
+		}
+	}
+	return false
 }
 
-// Find next available port, skipping used ports and occupied OS ports
+// getNextAvailablePort finds the next available port, skipping used and occupied ports.
 func getNextAvailablePort(start int, used *UsedPorts) (int, error) {
-    for port := start; port <= 65535; port++ {
-        if isPortUsed(used, port) {
-            continue
-        }
+	for port := start; port <= 65535; port++ {
+		if isPortUsed(used, port) {
+			continue
+		}
 
-        addr := fmt.Sprintf(":%d", port)
-        l, err := net.Listen("tcp", addr)
-        if err != nil {
-            // Port in use at OS level, skip
-            continue
-        }
-        l.Close()
-        return port, nil
-    }
-    return 0, fmt.Errorf("no available port found starting at %d", start)
+		addr := fmt.Sprintf(":%d", port)
+		l, err := net.Listen("tcp", addr)
+		if err != nil {
+			// Port in use at OS level, skip
+			continue
+		}
+		l.Close()
+		return port, nil
+	}
+	return 0, fmt.Errorf("no available port found starting at %d", start)
 }
 
-func readAndIncrementPortWithUsed(start int, nextPortFile, usedPortsFile string) (int, error) {
-    // Read next port number
-    nextPort := start
-    portBytes, err := ioutil.ReadFile(nextPortFile)
-    if err == nil {
-        p, err := strconv.Atoi(string(portBytes))
-        if err == nil && p >= start {
-            nextPort = p
-        }
-    }
+// readAndIncrementPortWithUsed finds the next available port and stores it.
+func readAndIncrementPortWithUsed(start int, serviceName, nextPortFile, usedPortsFile string) (int, error) {
+	// Read next port number
+	nextPort := start
+	portBytes, err := ioutil.ReadFile(nextPortFile)
+	if err == nil {
+		p, err := strconv.Atoi(string(portBytes))
+		if err == nil && p >= start {
+			nextPort = p
+		}
+	}
 
-    // Read used ports slice
-    usedPorts, err := readUsedPorts(usedPortsFile)
-    if err != nil {
-        return 0, err
-    }
+	// Read used ports slice
+	usedPorts, err := readUsedPorts(usedPortsFile)
+	if err != nil {
+		return 0, err
+	}
 
-    // Get next available port skipping used
-    port, err := getNextAvailablePort(nextPort, usedPorts)
-    if err != nil {
-        return 0, err
-    }
+	// Get next available port skipping used
+	port, err := getNextAvailablePort(nextPort, usedPorts)
+	if err != nil {
+		return 0, err
+	}
 
-    // Add new port to used ports slice
-    usedPorts.Ports = append(usedPorts.Ports, port)
+	// Add new port to used ports slice with the service name
+	usedPorts.Ports = append(usedPorts.Ports, PortInfo{Port: port, Service: serviceName})
 
-    // Write back updated used ports
-    err = writeUsedPorts(usedPortsFile, usedPorts)
-    if err != nil {
-        return 0, err
-    }
+	// Write back updated used ports
+	err = writeUsedPorts(usedPortsFile, usedPorts)
+	if err != nil {
+		return 0, err
+	}
 
-    // Update next port file to port+1
-    err = ioutil.WriteFile(nextPortFile, []byte(strconv.Itoa(port+1)), 0644)
-    if err != nil {
-        return 0, err
-    }
+	// Update next port file to port+1
+	err = ioutil.WriteFile(nextPortFile, []byte(strconv.Itoa(port+1)), 0644)
+	if err != nil {
+		return 0, err
+	}
 
-    return port, nil
+	return port, nil
+}
+
+// writeUsedPortForService adds a user-provided port and service to the used ports file.
+func writeUsedPortForService(port int, serviceName, filename string) error {
+	usedPorts, err := readUsedPorts(filename)
+	if err != nil {
+		return err
+	}
+
+	// Check if the port is already in the list
+	if !isPortUsed(usedPorts, port) {
+		usedPorts.Ports = append(usedPorts.Ports, PortInfo{Port: port, Service: serviceName})
+		return writeUsedPorts(filename, usedPorts)
+	}
+
+	// Port is already in the list, no need to write.
+	return nil
 }
 
 var generateCmd = &cobra.Command{
 	Use:   "generate [service-name] [port]",
 	Short: "Generate code resources",
 	Long:  "Generate microservice boilerplate code including router, controller, service, entity, go.mod, Dockerfile, and go.sum.",
-    Args: func(cmd *cobra.Command, args []string) error {
-        if len(args) < 1 {
-            return fmt.Errorf("requires service name argument")
-        }
-        if len(args) > 1 {
-            port := args[1]
-            if len(port) == 0 {
-                return fmt.Errorf("port cannot be empty string")
-            }
-            p, err := strconv.Atoi(port)
-            if err != nil {
-                return fmt.Errorf("port must be a valid number")
-            }
-            if p < 1024 || p > 65535 {
-                return fmt.Errorf("port must be between 1024 and 65535")
-            }
-        }
-        return nil
-    },
-    RunE: func(cmd *cobra.Command, args []string) error {
-        serviceName := args[0]
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) < 1 {
+			return fmt.Errorf("requires service name argument")
+		}
+		if len(args) > 1 {
+			port := args[1]
+			if len(port) == 0 {
+				return fmt.Errorf("port cannot be empty string")
+			}
+			p, err := strconv.Atoi(port)
+			if err != nil {
+				return fmt.Errorf("port must be a valid number")
+			}
+			if p < 1024 || p > 65535 {
+				return fmt.Errorf("port must be between 1024 and 65535")
+			}
+		}
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		serviceName := args[0]
+		usedPortsFile := "used_ports.json"
 
-        var port string
-        if len(args) > 1 && args[1] != "" {
-            port = args[1]
+		// 1. Check if the service name already exists.
+		// Assuming you have a function to check for existing services.
+		if serviceExists(serviceName) {
+			return fmt.Errorf("a service with the name '%s' already exists", serviceName)
+		}
+
+		var port int
+		if len(args) > 1 && args[1] != "" {
+			var err error
+			port, err = strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("port must be a valid number: %w", err)
+			}
+			
+			// 2. Check if the user-provided port is already used.
+			usedPorts, err := readUsedPorts(usedPortsFile)
+			if err != nil {
+				return fmt.Errorf("failed to read used ports file: %w", err)
+			}
+			if isPortUsed(usedPorts, port) {
+				return fmt.Errorf("the port '%d' is already in use", port)
+			}
+			
+			// Store the user-provided port with the service name.
+			err = writeUsedPortForService(port, serviceName, usedPortsFile)
+			if err != nil {
+				return fmt.Errorf("failed to store user-provided port: %w", err)
+			}
+
+		} else {
+			// Logic for automatically finding a port remains the same.
+			portFile := "port.json"
+			p, err := readAndIncrementPortWithUsed(8080, serviceName, portFile, usedPortsFile)
+			if err != nil {
+				return fmt.Errorf("failed to get next available port: %w", err)
+			}
+			port = p
+		}
+
+		return generateService(serviceName, strconv.Itoa(port))
+	},
+}
+
+// listServicesCmd is a new Cobra command to list all services and their ports.
+var listServicesCmd = &cobra.Command{
+    Use:   "list-services",
+    Short: "List all generated services and their ports",
+    Long:  "Displays a list of all microservices that have been generated, along with the ports they are using.",
+    Run: func(cmd *cobra.Command, args []string) {
+        usedPortsFile := "used_ports.json"
+
+        usedPorts, err := readUsedPorts(usedPortsFile)
+        if err != nil {
+            // Check if the error is due to the file not existing.
+            if os.IsNotExist(err) {
+                fmt.Println("No services have been generated yet")
+                return
+            }
+            // For other file-related errors, print a more detailed message.
+            fmt.Fprintf(os.Stderr, "Error reading used ports file: %v\n", err)
+            return
+        }
+
+        if len(usedPorts.Ports) == 0 {
+            fmt.Println("No services have been generated yet.")
         } else {
-            portFile := "port.json"
-            usedPortsFile := "used_ports.json"
-
-            p, err := readAndIncrementPortWithUsed(8080, portFile, usedPortsFile)
-            if err != nil {
-                return fmt.Errorf("failed to get next available port: %w", err)
+            fmt.Println("--- Generated Services ---")
+            for _, pInfo := range usedPorts.Ports {
+                fmt.Printf("Service: %-25s Port: %d\n", pInfo.Service, pInfo.Port)
             }
-            port = strconv.Itoa(p)
+            fmt.Println("--------------------------")
         }
-            return generateService(serviceName, port) // Your Restful generator
-
     },
 }
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
+
+	rootCmd.AddCommand(listServicesCmd)
 }
 
 func generateService(name, port string) error {
@@ -330,6 +428,7 @@ func createMicroservice(name, port string) error {
 		"service.tmpl",
 		"go.mod.tmpl",
 		"Dockerfile.tmpl",
+		"entity_pkg.tmpl", // New template for the entity
 	}
 
 	outputFiles := []string{
@@ -339,6 +438,7 @@ func createMicroservice(name, port string) error {
 		filepath.Join(basePath, "internal", "service.go"),
 		filepath.Join(basePath, "go.mod"),
 		filepath.Join(basePath, "Dockerfile"),
+		filepath.Join("pkg", "entities", fmt.Sprintf("%s.entity.go", name)),
 	}
 
 	funcMap := template.FuncMap{
