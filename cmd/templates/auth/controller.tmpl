@@ -1,0 +1,98 @@
+package internal
+
+import (
+	"log"
+	"time" // For HealthCheckHandler timestamp
+
+	"github.com/gofiber/fiber/v2"
+	"pkg/http"
+)
+
+// LoginRequest defines the structure for the login request body.
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// LoginResponse defines the structure for the login response.
+type LoginResponse struct {
+	UserID    string `json:"userId"`
+	Message   string `json:"message"`
+	Token     string `json:"token"`     // The JWT token issued upon successful login
+	ExpiresAt int64  `json:"expiresAt"` // Token expiration timestamp (Unix seconds)
+}
+
+// AuthController handles HTTP requests related to authentication.
+type AuthController struct {
+	service *AuthService
+}
+
+// NewAuthController creates a new AuthController instance.
+// It takes a pointer to an AuthService, allowing the controller to interact with the business logic.
+func NewAuthController(service *AuthService) *AuthController {
+	return &AuthController{service: service}
+}
+
+// HealthCheckHandler responds to health check requests for the auth service.
+// This is a simple, unauthenticated endpoint to confirm the service is running.
+func (c *AuthController) HealthCheckHandler(ctx *fiber.Ctx) error {
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
+		"status":    "healthy",
+		"timestamp": time.Now().Format(time.RFC3339), // Format timestamp for consistency
+		"service":   "{{.Name | lower}}-service",
+	})
+}
+
+// Login handles user login requests.
+// It parses credentials, authenticates the user via the service layer, and if successful,
+// generates and returns a JWT token.
+func (c *AuthController) Login(ctx *fiber.Ctx) error {
+	var req LoginRequest
+	// Use Fiber's BodyParser to automatically parse the JSON request body into the struct.
+	if err := ctx.BodyParser(&req); err != nil {
+		log.Printf("Login request body parse error: %v", err)
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	// Authenticate the user via the service layer.
+	// The ctx.Context() provides the request context for propagation.
+	userID, err := c.service.AuthenticateUser(ctx.Context(), req.Username, req.Password)
+	if err != nil {
+		log.Printf("Authentication failed for user '%s': %v", req.Username, err)
+		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Invalid username or password", // Generic message to avoid leaking info
+		})
+	}
+
+	// If authentication is successful, generate a JWT token using the shared middleware function.
+	jwtToken, err := middleware.GenerateJWT(userID)
+	if err != nil {
+		log.Printf("Failed to generate JWT for user '%s': %v", userID, err)
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create authentication token",
+		})
+	}
+
+	// Calculate approximate expiration for client.
+	// The middleware.GenerateJWT typically uses a fixed expiry (e.g., 72 hours).
+	// This should match the actual token's expiry.
+	expiresAt := time.Now().Add(time.Hour * 72).Unix() // Assuming 72 hours validity for demo
+
+	// Optionally, set the JWT in the Authorization header for client convenience.
+	ctx.Set("Authorization", "Bearer "+jwtToken)
+
+	// Return the token and user ID in the response body.
+	return ctx.Status(fiber.StatusOK).JSON(LoginResponse{
+		UserID:    userID,
+		Message:   "Login successful",
+		Token:     jwtToken,
+		ExpiresAt: expiresAt,
+	})
+}
+
+// You can add other authentication-related handlers here, e.g.:
+// - Register(ctx *fiber.Ctx) error: To handle new user registrations.
+// - Logout(ctx *fiber.Ctx) error: Typically client-side token invalidation, or server-side if using blacklist.
+// - RefreshToken(ctx *fiber.Ctx) error: To issue new access tokens using refresh tokens.

@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+
+# --- Build stage ---
+FROM golang:1.24-alpine AS builder
+
+RUN apk add --no-cache upx ca-certificates
+
+WORKDIR /app
+
+COPY pkg ./pkg
+COPY services/Auth ./services/Auth
+
+WORKDIR /app/services/Auth
+
+ENV GOMAXPROCS=$(nproc)
+
+RUN --mount=type=cache,target=/go/pkg/mod go mod download -v
+RUN CGO_ENABLED=0 GOOS=linux go build -o Auth-service -ldflags="-s -w" ./src/cmd
+RUN upx --best --lzma Auth-service || true
+
+# --- Run stage ---
+FROM scratch
+
+WORKDIR /app
+
+COPY --from=builder /app/services/Auth/Auth-service ./Auth-service
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY .env .env
+
+EXPOSE 8080
+ENV PORT=8080
+
+CMD ["./Auth-service"]

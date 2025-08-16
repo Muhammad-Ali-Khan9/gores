@@ -1,19 +1,168 @@
-package http
+package middleware
 
 import (
-	"net/http"
+	"crypto/sha256"
+	"crypto/subtle"
+	"log"
+	"os"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
+	"github.com/gofiber/fiber/v2/middleware/keyauth"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/golang-jwt/jwt/v5"
+	jwtware "github.com/gofiber/contrib/jwt" // Fiber contrib JWT middleware
 )
 
-// withCORS is a middleware that adds CORS headers to the response and handles OPTIONS requests.
-func WithCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next.ServeHTTP(w, r)
+// InitGlobalMiddlewares initializes and applies common global middlewares to the Fiber app.
+// This function should be called once in your main.go for each Fiber application.
+func InitGlobalMiddlewares(app *fiber.App) {
+	// --- Foundational Middlewares ---
+
+	// Panic recovery middleware to gracefully handle unexpected runtime errors.
+	// It recovers from panics and sends a 500 Internal Server Error.
+	app.Use(recover.New(recover.Config{
+		EnableStackTrace: true, // Enable stack traces for debugging (disable in production if sensitive info might leak)
+	}))
+
+	// Request ID middleware for tracing requests across logs in a distributed system.
+	// Adds a unique X-Request-ID header to each request and makes it available in c.Locals().
+	app.Use(requestid.New())
+
+	// Logger middleware for structured logging of HTTP requests, making it easier to analyze logs.
+	app.Use(logger.New(logger.Config{
+		// Recommended JSON-like format for structured logging.
+		// Includes request details, response status, latency, and unique request ID.
+		Format: `{"time":"${time}","request_id":"${locals:requestid}","status":"${status}","latency":"${latency}","method":"${method}","path":"${path}","ip":"${ip}","error":"${error}"}` + "\n",
+		TimeFormat: "2006-01-02 15:04:05", // Standard time format
+		TimeZone:   "Local",             // Use local time zone
+		Output:     os.Stdout,           // Direct logs to standard output (Docker-friendly)
+	}))
+
+	// --- Security Middlewares ---
+
+	// CORS middleware to enable Cross-Origin Resource Sharing.
+	// Crucial for frontend applications served from different domains.
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*", // Allows all origins. **IMPORTANT: For production, specify your exact frontend origins.**
+		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH", // Allowed HTTP methods
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-API-Key, X-Request-ID", // Allowed headers
+		// You can add more specific configurations based on your needs, e.g.:
+		// AllowCredentials: true, // Allow sending cookies/auth headers
+		// MaxAge:           300,   // How long the preflight request can be cached (in seconds)
+	}))
+
+	// Helmet middleware to set various HTTP headers for security.
+	// Helps protect against common web vulnerabilities (e.g., XSS, clickjacking).
+	app.Use(helmet.New())
+
+	// --- Performance & Rate Limiting Middlewares ---
+
+	// Limiter middleware to prevent brute-force attacks and abuse by limiting requests per IP.
+	app.Use(limiter.New(limiter.Config{
+		Max:        20,               // Max 20 requests
+		Expiration: 30 * time.Second, // within 30 seconds
+		LimitReached: func(c *fiber.Ctx) error {
+			// Custom response when rate limit is exceeded
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Too many requests. Please try again later.",
+			})
+		},
+	}))
+
+	// Compression middleware to compress response bodies (e.g., GZIP, Brotli).
+	// Reduces bandwidth usage and improves load times for clients.
+	app.Use(compress.New(compress.Config{
+		Level: compress.LevelBestSpeed, // Choose compression level (LevelBestSpeed, LevelBestCompression, LevelDefault)
+	}))
+
+	log.Println("Global Fiber middlewares initialized.")
+}
+
+// -------------------------------------------------------------------------------------------------
+
+// --- JWT Authentication Functions ---
+// These functions provide middleware and a helper for handling JSON Web Tokens (JWTs).
+
+// ProtectedRouteJWT returns middleware that checks for a valid JWT token in the Authorization header.
+// It requires a JWT_SECRET environment variable to be set.
+func ProtectedRouteJWT() fiber.Handler {
+	// The jwtware.New function creates the middleware.
+	return jwtware.New(jwtware.Config{
+		// SigningKey uses the secret from environment variables to verify the token's signature.
+		SigningKey: jwtware.SigningKey{Key: []byte(os.Getenv("JWT_SECRET"))},
+		// ErrorHandler provides a custom response for authentication failures.
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Unauthorized: Invalid or expired token",
+			})
+		},
+		// SuccessHandler can be used to perform actions after successful authentication,
+		// but `jwtware` automatically sets `c.Locals("user")` with the token claims.
+	})
+}
+
+// GenerateJWT creates a new JWT for a given user ID.
+// This function is typically called by your authentication service (e.g., user service)
+// after successful user login or registration.
+func GenerateJWT(userID string) (string, error) {
+	// Define the claims (payload) for the JWT.
+	// "user_id" is a custom claim to store your application's internal user ID.
+	// "exp" sets the token's expiration time (72 hours from now).
+	claims := jwt.MapClaims{
+		"user_id": userID,
+		"exp":     time.Now().Add(time.Hour * 72).Unix(),
+	}
+
+	// Create a new token with the HS256 signing method and the defined claims.
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Sign the token using the secret key from environment variables.
+	// The JWT_SECRET must be strong and kept confidential.
+	return token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+}
+
+// -------------------------------------------------------------------------------------------------
+
+// --- API Key Authentication Functions ---
+// These functions provide middleware for handling API Key based authentication,
+// typically used for machine-to-machine communication or internal services.
+
+// ProtectedRouteAPIKey returns middleware that validates an API key from the X-API-Key header.
+// It requires an API_KEY environment variable to be set, which holds the secret API key.
+func ProtectedRouteAPIKey() fiber.Handler {
+	return keyauth.New(keyauth.Config{
+		KeyLookup: "header:X-API-Key", // Specifies to look for the API key in the 'X-API-Key' HTTP header.
+		Validator: func(c *fiber.Ctx, key string) (bool, error) {
+			// Get the secret API key from environment variables for comparison.
+			secretAPIKey := os.Getenv("API_KEY")
+
+			// Perform a secure constant-time comparison to prevent timing attacks.
+			// This is critical for security to avoid leaking information about the API key.
+			hashedAPIKey := sha256.Sum256([]byte(secretAPIKey))
+			hashedProvidedKey := sha256.Sum256([]byte(key))
+
+			// Return true if the hashed keys match.
+			if subtle.ConstantTimeCompare(hashedAPIKey[:], hashedProvidedKey[:]) == 1 {
+				return true, nil // Authentication successful
+			}
+
+			// Log unauthorized access attempts for monitoring and security auditing.
+			log.Printf("Unauthorized access attempt from IP: %s (Invalid API key)", c.IP())
+			// Return false and a specific error for the keyauth middleware to handle.
+			return false, keyauth.ErrMissingOrMalformedAPIKey
+		},
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			// Custom error handler for API key validation failures.
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Unauthorized: Invalid or missing API key",
+			})
+		},
 	})
 }

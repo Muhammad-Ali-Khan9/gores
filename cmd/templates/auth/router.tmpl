@@ -1,0 +1,59 @@
+package internal
+
+import (
+	"github.com/gofiber/fiber/v2"
+	"pkg/http"
+)
+
+// RegisterAuthRoutes registers all authentication-related HTTP routes with Fiber.
+// This includes public endpoints like login, and potentially protected ones.
+func RegisterAuthRoutes(app *fiber.App, controller *AuthController) {
+
+	// Define the base path for auth service routes.
+	// Typically /auth for authentication endpoints
+	basePath := "/auth"
+
+	// --- Public Routes ---
+	// These endpoints do NOT require any authentication.
+
+	// Health check endpoint for the auth service.
+	// Used by orchestrators (like Kubernetes) to check service liveness/readiness.
+	app.Get(basePath+"/health", controller.HealthCheckHandler)
+
+	// Login endpoint: Authenticates user credentials and issues a JWT.
+	// This is the primary endpoint for users to get their authentication token.
+	app.Post(basePath+"/login", controller.Login)
+
+	// Example: Registration endpoint (if your auth service handles user registration directly)
+	// app.Post(basePath+"/register", controller.Register)
+
+	// --- Routes Requiring ONLY JWT Authentication (Example) ---
+	// These routes would typically be for managing user sessions or tokens,
+	// accessible only after a user has obtained a JWT.
+	// For a pure authentication service, there might be fewer such endpoints,
+	// as primary token validation is typically handled by middleware in other services.
+	jwtAuthRoutes := app.Group(basePath+"/user", middleware.ProtectedRouteJWT())
+	{
+		// Example: Get authenticated user's session details or validate a token internally
+		// jwtAuthRoutes.Get("/session", controller.GetSessionDetails)
+		// Example: Refresh JWT token (requires refresh token in request body, not just access token in header)
+		// jwtAuthRoutes.Post("/refresh-token", controller.RefreshToken)
+	}
+
+	// --- Routes Requiring ONLY API Key Authentication (Example) ---
+	// For internal system interactions with the auth service (e.g., admin tools invalidating tokens).
+	apiKeyAuthRoutes := app.Group(basePath+"/internal", middleware.ProtectedRouteAPIKey())
+	{
+		// Example: Invalidate a user's session from an admin tool or other service
+		// apiKeyAuthRoutes.Post("/invalidate-session/:userId", controller.InvalidateSession)
+	}
+
+	// --- Routes Requiring EITHER JWT OR API Key Authentication (Example) ---
+	// For endpoints that might be called by both authenticated users and other services.
+	// This reuses the 'eitherAuthMiddleware' from the shared pkg.
+	combinedAuthRoutes := app.Group(basePath+"/combined", middleware.EitherAuthMiddleware())
+	{
+		// Example: Get general auth status that is accessible by both users and internal services
+		// combinedAuthRoutes.Get("/status", controller.GetAuthStatus)
+	}
+}

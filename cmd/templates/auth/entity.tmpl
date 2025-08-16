@@ -1,0 +1,21 @@
+package entities
+
+import (
+	"time"
+)
+
+const (
+	UserStatusActive    UserStatus = "active"
+	UserStatusInactive  UserStatus = "inactive"
+	UserStatusSuspended UserStatus = "suspended"
+)
+
+// User represents a user in the system.
+type User struct {
+	ID            string     `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	Email         string     `gorm:"uniqueIndex;not null" json:"email"`
+	PasswordHash  string     `gorm:"not null" json:"-"`               // Field to store bcrypt hashed password
+	Name     *string    `json:"first_name,omitempty"`
+	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+}

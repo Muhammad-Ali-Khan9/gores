@@ -3,9 +3,10 @@ package {{.Name | lower}}
 import (
 	"context"
 	"encoding/json"
-	"net/http"
+	"log"
 
-	"github.com/gorilla/mux"
+	"github.com/gofiber/fiber/v2"
+	"pkg/entities"
 )
 
 // {{.Name | title}}Controller handles HTTP requests for {{.Name | title}} operations.
@@ -18,64 +19,114 @@ func New{{.Name | title}}Controller(service *{{.Name | title}}Service) *{{.Name 
 	return &{{.Name | title}}Controller{service: service}
 }
 
-// GetAll handles GET /{{.Name | lower}}
-func (c *{{.Name | title}}Controller) GetAll(w http.ResponseWriter, r *http.Request) {
-	items, err := c.service.GetAll(context.Background())
+// --- CRUD Handlers ---
+
+// GetAll handles GET /{{.Name | lower}}s
+// Retrieves all items using the service.
+func (c *{{.Name | title}}Controller) GetAll(ctx *fiber.Ctx) error {
+	// Use Fiber's context for service calls for better traceability
+	items, err := c.service.GetAll(ctx.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		log.Printf("Error retrieving all {{.Name | lower}}s: %v", err)
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve items",
+		})
 	}
-	json.NewEncoder(w).Encode(items)
+	// Fiber automatically handles JSON serialization
+	return ctx.Status(fiber.StatusOK).JSON(items)
 }
 
-// GetByID handles GET /{{.Name | lower}}/{id}
-func (c *{{.Name | title}}Controller) GetByID(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	item, err := c.service.GetByID(context.Background(), id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
+// GetByID handles GET /{{.Name | lower}}s/{id}
+// Retrieves a single item by its ID.
+func (c *{{.Name | title}}Controller) GetByID(ctx *fiber.Ctx) error {
+	// Access path parameter using Fiber's Params()
+	id := ctx.Params("id")
+	if id == "" {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "ID is required",
+		})
 	}
-	json.NewEncoder(w).Encode(item)
+
+	item, err := c.service.GetByID(ctx.Context(), id)
+	if err != nil {
+		log.Printf("Error retrieving {{.Name | lower}} by ID %s: %v", id, err)
+		// For consistency, returning 404 if item not found
+		return ctx.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": fmt.Sprintf("Item with ID %s not found", id),
+		})
+	}
+	return ctx.Status(fiber.StatusOK).JSON(item)
 }
 
-// Create handles POST /{{.Name | lower}}
-func (c *{{.Name | title}}Controller) Create(w http.ResponseWriter, r *http.Request) {
+// Create handles POST /{{.Name | lower}}s
+// Creates a new item from the request body.
+func (c *{{.Name | title}}Controller) Create(ctx *fiber.Ctx) error {
 	var item entities.{{.Name | title}}
-	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	// Use Fiber's BodyParser to automatically parse the request body (e.g., JSON)
+	if err := ctx.BodyParser(&item); err != nil {
+		log.Printf("Error parsing request body for {{.Name | lower}} creation: %v", err)
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
-	created, err := c.service.Create(context.Background(), &item)
+
+	created, err := c.service.Create(ctx.Context(), &item)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		log.Printf("Error creating {{.Name | lower}}: %v", err)
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create item",
+		})
 	}
-	json.NewEncoder(w).Encode(created)
+	// Return 201 Created status
+	return ctx.Status(fiber.StatusCreated).JSON(created)
 }
 
-// Update handles PUT /{{.Name | lower}}/{id}
-func (c *{{.Name | title}}Controller) Update(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+// Update handles PUT /{{.Name | lower}}s/{id}
+// Updates an existing item by its ID.
+func (c *{{.Name | title}}Controller) Update(ctx *fiber.Ctx) error {
+	id := ctx.Params("id")
+	if id == "" {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "ID is required for update",
+		})
+	}
+
 	var item entities.{{.Name | title}}
-	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	if err := ctx.BodyParser(&item); err != nil {
+		log.Printf("Error parsing request body for {{.Name | lower}} update (ID %s): %v", id, err)
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
 	}
-	updated, err := c.service.Update(context.Background(), id, &item)
+
+	updated, err := c.service.Update(ctx.Context(), id, &item)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		log.Printf("Error updating {{.Name | lower}} with ID %s: %v", id, err)
+		// Consider more specific error handling if item not found, etc.
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to update item with ID %s", id),
+		})
 	}
-	json.NewEncoder(w).Encode(updated)
+	return ctx.Status(fiber.StatusOK).JSON(updated)
 }
 
-// Delete handles DELETE /{{.Name | lower}}/{id}
-func (c *{{.Name | title}}Controller) Delete(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	if err := c.service.Delete(context.Background(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+// Delete handles DELETE /{{.Name | lower}}s/{id}
+// Deletes an item by its ID.
+func (c *{{.Name | title}}Controller) Delete(ctx *fiber.Ctx) error {
+	id := ctx.Params("id")
+	if id == "" {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "ID is required for deletion",
+		})
 	}
-	w.WriteHeader(http.StatusNoContent)
+
+	if err := c.service.Delete(ctx.Context(), id); err != nil {
+		log.Printf("Error deleting {{.Name | lower}} with ID %s: %v", id, err)
+		// Consider more specific error handling if item not found
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to delete item with ID %s", id),
+		})
+	}
+	// No content to return for a successful deletion
+	return ctx.SendStatus(fiber.StatusNoContent)
 }

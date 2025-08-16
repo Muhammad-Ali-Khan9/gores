@@ -1,16 +1,107 @@
 package {{.Name | lower}}
 
 import (
-	"github.com/gorilla/mux"
+	"github.com/gofiber/fiber/v2"
+	"pkg/http"
 )
 
-// Register{{.Name | title}}Routes registers all {{.Name | lower}}-related HTTP routes.
-func Register{{.Name | title}}Routes(r *mux.Router, controller *{{.Name | title}}Controller) {
+// eitherAuthMiddleware is a custom Fiber middleware that allows a request to proceed
+// if it is successfully authenticated by EITHER a JWT or an API Key.
+// This function should be defined in your 'pkg/http/middleware.go'.
+// It orchestrates the checks by attempting JWT first, then API Key if JWT fails.
+func eitherAuthMiddleware() fiber.Handler {
+	jwtAuth := middleware.ProtectedRouteJWT()
+	apiKeyAuth := middleware.ProtectedRouteAPIKey()
+
+	return func(c *fiber.Ctx) error {
+		errJWT := jwtAuth(c)
+		if errJWT == nil {
+			return nil
+		}
+
+		// If JWT failed, attempt API Key authentication. If successful, proceed.
+		errAPIKey := apiKeyAuth(c)
+		if errAPIKey == nil {
+			return nil // API Key authentication succeeded
+		}
+
+		// If both authentication attempts failed, send an Unauthorized response.
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Unauthorized: Requires valid JWT OR API Key.",
+		})
+	}
+}
+
+// Register{{.Name | title}}Routes registers all {{.Name | lower}}-related HTTP routes with Fiber.
+// This function applies different authentication middlewares based on route requirements.
+func Register{{.Name | title}}Routes(app *fiber.App, controller *{{.Name | title}}Controller) {
+
+	// Define the base path for this service's routes.
+	// E.g., for 'user' service, basePath will be '/users'.
 	basePath := "/{{.Name | lower}}s"
 
-	r.HandleFunc(basePath, controller.GetAll).Methods("GET")
-	r.HandleFunc(basePath+"/{id}", controller.GetByID).Methods("GET")
-	r.HandleFunc(basePath, controller.Create).Methods("POST")
-	r.HandleFunc(basePath+"/{id}", controller.Update).Methods("PUT")
-	r.HandleFunc(basePath+"/{id}", controller.Delete).Methods("DELETE")
+	// --- Public Health Check Route ---
+	// This endpoint does NOT require authentication. It's crucial for Kubernetes or
+	// other orchestration systems to check service liveness and readiness.
+	app.Get(basePath+"/health", controller.HealthCheckHandler) // Assuming a HealthCheckHandler in your controller
+
+	// --- Routes Requiring ONLY JWT Authentication ---
+	// These routes are typically user-facing APIs, where the user has logged in
+	// and is accessing their own data or performing actions on their behalf.
+	jwtAuthRoutes := app.Group(basePath, middleware.ProtectedRouteJWT())
+	{
+		// == Common CRUD Operations (User-specific) ==
+		// GET all items for the authenticated user (e.g., /users, /orders)
+		jwtAuthRoutes.Get("/", controller.GetAll)
+		// GET a specific item by ID (e.g., /users/:id, /orders/:id)
+		jwtAuthRoutes.Get("/:id", controller.GetByID)
+		// POST to create a new item (e.g., creating a new user profile, placing an order)
+		jwtAuthRoutes.Post("/", controller.Create)
+		// PUT to update an existing item by ID (e.g., updating user profile, order status)
+		jwtAuthRoutes.Put("/:id", controller.Update)
+		// DELETE an item by ID (e.g., deleting a user account, cancelling an order)
+		jwtAuthRoutes.Delete("/:id", controller.Delete)
+
+		// == Example Specific User-Facing API Paths ==
+		// (Replace these with your actual service-specific routes)
+		// jwtAuthRoutes.Get("/profile", controller.GetUserProfile)                     // For a 'user' service
+		// jwtAuthRoutes.Post("/change-password", controller.ChangeUserPassword)     // For a 'user' service
+		// jwtAuthRoutes.Get("/my-dashboard-data", controller.GetDashboardData)      // For a dashboard/analytics service
+		// jwtAuthRoutes.Post("/upload-document", controller.UploadDocument)         // For a 'document' service
+	}
+
+	// --- Routes Requiring ONLY API Key Authentication ---
+	// These routes are generally for machine-to-machine communication, internal services,
+	// or administrative tasks where a shared secret API key is used for access.
+	// We've added a sub-path '/api-internal' to clearly differentiate these from user-facing APIs.
+	apiKeyAuthRoutes := app.Group(basePath+"/api-internal", middleware.ProtectedRouteAPIKey())
+	{
+		// == Example Internal/Service-to-Service API Paths ==
+		// (Replace these with your actual internal service routes)
+		// apiKeyAuthRoutes.Post("/sync-data", controller.SyncData)                     // For data synchronization
+		// apiKeyAuthRoutes.Get("/admin-report", controller.GetAdminReport)             // For admin reports
+		// apiKeyAuthRoutes.Post("/process-queue", controller.ProcessQueueItem)         // For processing background jobs
+		// apiKeyAuthRoutes.Put("/update-user-status/:id", controller.UpdateUserStatus) // For internal user status updates
+	}
+
+	// --- Routes Requiring EITHER JWT OR API Key Authentication ---
+	// These routes can be accessed by both authenticated end-users (via JWT) and
+	// other trusted services (via API Key). This is useful for flexible endpoints.
+	// We've added a sub-path '/combined-auth' for clarity.
+	combinedAuthRoutes := app.Group(basePath+"/combined-auth", eitherAuthMiddleware())
+	{
+		// == Example Combined Authentication API Paths ==
+		// (Replace these with your actual flexible access routes)
+		// combinedAuthRoutes.Get("/status-overview", controller.GetStatusOverview)      // Dashboard view (user) or health check by another service
+		// combinedAuthRoutes.Post("/webhook-events", controller.HandleWebhookEvent)     // Receiving events from external systems or internal
+		// combinedAuthRoutes.Get("/public-data/:id", controller.GetPublicData)         // Data accessible by user and other services
+	}
+
+	// --- Other Public Routes ---
+	// Any additional routes that should be accessible without any authentication.
+	// These are distinct from the health check but equally open.
+	// (Add your specific public routes here as needed)
+	// Example:
+	// app.Post(basePath+"/public-signup", controller.PublicSignupHandler) // For a 'user' service
+	// app.Get(basePath+"/public-info", controller.GetPublicInformation)   // General info without login
 }

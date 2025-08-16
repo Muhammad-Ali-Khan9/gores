@@ -1,0 +1,202 @@
+package internal
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+
+	"pkg/entities"
+	"pkg/http"
+)
+
+// AuthService handles core business logic for authentication and user management.
+//
+// IMPORTANT NOTE ON MICROSERVICE DESIGN:
+// While user CRUD is included here for demonstration, in a true microservices architecture,
+// full user CRUD operations should ideally reside in a dedicated 'User Service'.
+// The 'Auth Service' would then focus purely on authentication (login, token issuance, verification)
+// and authorization, interacting with the User Service via inter-service communication.
+// This design promotes better separation of concerns and scalability.
+type AuthService struct {
+	db *gorm.DB
+}
+
+// NewAuthService creates a new AuthService instance, requiring a *gorm.DB connection.
+func NewAuthService(db *gorm.DB) *AuthService {
+	return &AuthService{db: db}
+}
+
+// AuthenticateUser performs a secure authentication check against user credentials in the database.
+// It retrieves the user by email and securely compares the provided password with the stored hash.
+func (s *AuthService) AuthenticateUser(ctx context.Context, email, password string) (string, error) {
+	var user entities.User
+	// Find user by email
+	err := s.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			log.Printf("Authentication failed for user '%s': User not found", email)
+			return "", fmt.Errorf("invalid credentials") // Generic message for security
+		}
+		log.Printf("Authentication failed for user '%s' due to DB error: %v", email, err)
+		return "", fmt.Errorf("authentication failed due to internal error")
+	}
+
+	// Securely compare the provided plain-text password with the stored hashed password.
+	// user.PasswordHash is assumed to contain the bcrypt hashed password.
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	if err != nil {
+		log.Printf("Authentication failed for user '%s': Invalid password", email)
+		return "", fmt.Errorf("invalid credentials") // Generic message for security
+	}
+
+	log.Printf("User '%s' authenticated successfully.", email)
+	return user.ID, nil // Return the actual user's unique internal ID
+}
+
+// ===================================
+// User CRUD Operations
+// ===================================
+
+// CreateUser creates a new user record in the database, hashes the password, and issues a JWT token.
+//
+// Production-Ready Considerations:
+// - Ensure 'user.Password' in the input `entities.User` is the plain-text password.
+// - The `entities.User` struct MUST have a `PasswordHash` field to store the bcrypt hash.
+// - Sensitive data like the plain-text password should NOT be stored or logged.
+func (s *AuthService) CreateUser(ctx context.Context, user *entities.User) (*entities.User, string, error) { // User now has `Name` instead of `FirstName`/`LastName`
+	// Assign a new UUID if not provided.
+	if user.ID == "" {
+		user.ID = uuid.New().String()
+	}
+	now := time.Now()
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = now
+	}
+	user.UpdatedAt = now
+
+	// Ensure a plain-text password is provided for hashing.
+	if user.Password == "" {
+		return nil, "", fmt.Errorf("password cannot be empty for new user creation")
+	}
+
+	// Hash the password securely using bcrypt.
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Failed to hash password for user '%s': %v", user.Email, err)
+		return nil, "", fmt.Errorf("failed to hash password: %w", err)
+	}
+	user.PasswordHash = string(hashedPassword) // Store the hashed password
+
+	// Clear the plain-text password from the struct before saving to database.
+	// This prevents accidental logging or storage of plain-text passwords.
+	user.Password = ""
+
+	log.Printf("Creating user with ID: %s, Email: %s, Name: %s", user.ID, user.Email, dereferenceString(user.Name)) // Adjusted log
+	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
+		return nil, "", fmt.Errorf("failed to create user in database: %w", err)
+	}
+
+	// Issue JWT token for the newly created user.
+	// The JWT secret *must* be set as an environment variable (e.g., JWT_SECRET).
+	// Recommend generating a long, random string for this secret (e.g., 32+ characters).
+	token, err := middleware.GenerateJWT(user.ID) // Use the shared middleware function
+	if err != nil {
+		log.Printf("Failed to generate JWT for new user '%s': %v", user.ID, err)
+		return nil, "", fmt.Errorf("failed to generate JWT for new user: %w", err)
+	}
+
+	return user, token, nil
+}
+
+// GetUserByID retrieves a single user record from the database by their unique ID.
+func (s *AuthService) GetUserByID(ctx context.Context, userID string) (*entities.User, error) {
+	var user entities.User
+	err := s.db.WithContext(ctx).First(&user, "id = ?", userID).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			log.Printf("User with ID '%s' not found.", userID)
+			return nil, fmt.Errorf("user with ID %s not found", userID)
+		}
+		log.Printf("Failed to retrieve user by ID '%s' due to DB error: %v", userID, err)
+		return nil, fmt.Errorf("failed to retrieve user by ID %s: %w", userID, err)
+	}
+	log.Printf("Retrieved user with ID: %s, Email: %s, Name: %s", user.ID, user.Email, dereferenceString(user.Name)) // Adjusted log
+	return &user, nil
+}
+
+// GetAllUsers retrieves all user records from the database.
+// Use with caution in production for large datasets; consider pagination.
+func (s *AuthService) GetAllUsers(ctx context.Context) ([]entities.User, error) {
+	var users []entities.User
+	log.Println("Attempting to retrieve all users.")
+	err := s.db.WithContext(ctx).Find(&users).Error
+	if err != nil {
+		log.Printf("Failed to retrieve all users from DB: %v", err)
+		return nil, fmt.Errorf("failed to retrieve all users: %w", err)
+	}
+	log.Printf("Retrieved %d users.", len(users))
+	return users, nil
+}
+
+// UpdateUser updates an existing user's details in the database.
+//
+// Production-Ready Considerations for Password Update:
+// - If the DTO includes a new password, it MUST be hashed with bcrypt BEFORE updating.
+// - Do NOT blindly overwrite `PasswordHash` with a plain-text password from the DTO.
+// - Implement separate methods for password updates if possible, or ensure careful handling.
+func (s *AuthService) UpdateUser(ctx context.Context, user *entities.User) error { // User now has `Name` instead of `FirstName`/`LastName`
+	if user.ID == "" {
+		return fmt.Errorf("user ID cannot be empty for update operation")
+	}
+	user.UpdatedAt = time.Now() // Update timestamp on modification
+
+	// IMPORTANT: If you allow password changes, handle them securely here!
+	// This example does NOT handle password changes during a general UpdateUser call.
+	// You would typically fetch the existing user, then conditionally hash and update
+	// the password field if it's provided and different.
+	user.Password = "" // Ensure plain-text password is not saved if passed in DTO inadvertently
+
+	log.Printf("Updating user with ID: %s, Email: %s, Name: %s", user.ID, user.Email, dereferenceString(user.Name)) // Adjusted log
+	err := s.db.WithContext(ctx).Save(user).Error // Save updates all fields, including zero values.
+	if err != nil {
+		log.Printf("Failed to update user with ID '%s': %v", user.ID, err)
+		return fmt.Errorf("failed to update user with ID %s: %w", user.ID, err)
+	}
+	log.Printf("User with ID '%s' updated successfully.", user.ID)
+	return nil
+}
+
+// DeleteUser deletes a user record from the database by their unique ID.
+func (s *AuthService) DeleteUser(ctx context.Context, userID string) error {
+	log.Printf("Attempting to delete user with ID: %s", userID)
+	result := s.db.WithContext(ctx).Delete(&entities.User{}, "id = ?", userID)
+	if result.Error != nil {
+		log.Printf("Failed to delete user with ID '%s' due to DB error: %v", userID, result.Error)
+		return fmt.Errorf("failed to delete user with ID %s: %w", userID, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		log.Printf("User with ID '%s' not found for deletion.", userID)
+		return fmt.Errorf("user with ID %s not found for deletion", userID)
+	}
+	log.Printf("User with ID '%s' deleted successfully.", userID)
+	return nil
+}
+
+// Helper function to safely dereference a string pointer or return an empty string.
+func dereferenceString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// You can add more auth-related business logic here, e.g.:
+// - RegisterUser (if different from CreateUser)
+// - ResetPassword
+// - VerifyEmail
+// - ValidateRefreshToken
