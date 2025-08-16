@@ -432,12 +432,12 @@ func createMicroservice(name, port string) error {
 	}
 
 	outputFiles := []string{
-		filepath.Join(basePath, "cmd", "main.go"),
-		filepath.Join(basePath, "internal", "router.go"),
-		filepath.Join(basePath, "internal", "controller.go"),
-		filepath.Join(basePath, "internal", "service.go"),
-		filepath.Join(basePath, "go.mod"),
-		filepath.Join(basePath, "Dockerfile"),
+		filepath.Join("services" ,basePath, "cmd", "main.go"),
+		filepath.Join("services" ,basePath, "internal", "router.go"),
+		filepath.Join("services" ,basePath, "internal", "controller.go"),
+		filepath.Join("services" ,basePath, "internal", "service.go"),
+		filepath.Join("services" ,name, "go.mod"),
+		filepath.Join("services",name, "Dockerfile"),
 		filepath.Join("pkg", "entities", fmt.Sprintf("%s.entity.go", name)),
 	}
 

@@ -2,28 +2,32 @@
 
 # --- Build stage ---
 FROM golang:1.24-alpine AS builder
+
+RUN apk add --no-cache upx ca-certificates
+
 WORKDIR /app
 
-# Copy the service go.mod and go.sum
-COPY services/{{.Name}}/go.mod services/{{.Name}}/go.sum ./
-# Copy unified pkg go.mod and go.sum
-COPY pkg/go.mod pkg/go.sum ./pkg/
-RUN go mod download
-
-# Copy shared and service code
 COPY pkg ./pkg
-COPY services/{{.Name}}/src ./src
+COPY services/{{.Name}} ./services/{{.Name}}
 
-# Build the service binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o {{.Name}}-service ./src/cmd
+WORKDIR /app/services/{{.Name}}
+
+ENV GOMAXPROCS=$(nproc)
+
+RUN --mount=type=cache,target=/go/pkg/mod go mod download -v
+RUN CGO_ENABLED=0 GOOS=linux go build -o {{.Name}}-service -ldflags="-s -w" ./src/cmd
+RUN upx --best --lzma {{.Name}}-service || true
 
 # --- Run stage ---
-FROM alpine:latest
+FROM scratch
+
 WORKDIR /app
-COPY --from=builder /app/{{.Name}}-service ./{{.Name}}-service
-COPY --from=builder /app/pkg ./pkg
+
+COPY --from=builder /app/services/{{.Name}}/{{.Name}}-service ./{{.Name}}-service
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY .env .env
 
 EXPOSE {{.Port}}
 ENV PORT={{.Port}}
+
 CMD ["./{{.Name}}-service"]
