@@ -24,49 +24,46 @@ This tool supports generating RESTful microservices with plans to extend support
 
 ---
 
-## What does gores generate for you?
+### What `gores` Generates for You (Detailed)
 
-When you run `gores generate [service-name] [port]`, it creates a complete, production-ready microservice skeleton with the following features:
+`gores` aims to give you a head start by providing a well-structured and functional microservice skeleton:
 
-### 1. Clean Project Structure
+#### 1. Clean Project Structure
+Your generated service will adhere to common Go project layout recommendations:
+-   **`cmd/main.go`** — The entry point for the microservice application.
+-   **`internal/`** — Contains internal packages for the service's specific logic (e.g., `router.go`, `controller.go`, `service.go`). This structure promotes modularity and clean architecture.
+-   **`pkg/` (Shared)** — A core part of the monorepo, containing shared packages:
+    -   **`entities/`**: Defines common data models like `User` (with `Email`, `Name`, `PasswordHash`, `CreatedAt`, `UpdatedAt`) and other domain entities. The `User` entity is designed for secure password handling with **bcrypt password hashes**.
+    -   **`database/postgres/`**: Provides a reusable function for connecting to a PostgreSQL database using GORM.
+    -   **`http/middleware/`**: Houses global HTTP middleware (e.g., for JWT authentication, API key validation, CORS, logging).
 
-- **`cmd/main.go`** — Entrypoint that bootstraps the server
-- **`internal/`** — Internal packages for routers, controllers, and services following clean architecture
-- **`pkg/`** — Shared packages for entities, database connection, middleware, and utilities
+#### 2. Environment-aware Configuration
+-   Services load configuration from `.env` files using [`godotenv`](https://github.com/joho/godotenv), allowing easy management of environment-specific settings (like database credentials, JWT secrets, ports).
 
-### 2. Environment-aware Configuration
+#### 3. PostgreSQL Integration via GORM
+-   A robust **GORM ORM** integration for PostgreSQL database interactions.
+-   Database connection details (host, port, user, password, SSL mode) are read from environment variables.
+-   Includes database connection health checking on startup and graceful closing during shutdown.
+-   **Automigrations**: Services can be configured to automatically migrate database schemas based on your GORM models.
 
-- Loads environment variables from `.env` files using [`godotenv`](https://github.com/joho/godotenv)
-- Supports different `.env` loading paths for development and production environments
+#### 4. HTTP Server with Fiber ⚡
+-   Leverages the high-performance **Fiber** web framework for building HTTP APIs.
+-   Automatically sets up basic routing and integrates your shared HTTP middleware.
+-   Includes routes for basic operations (e.g., health checks, user upsert/login, user CRUD if applicable).
 
-### 3. PostgreSQL Integration via GORM
+#### 5. Secure Authentication & Authorization
+-   The default `auth-service` implements **production-ready bcrypt password hashing** for storing user credentials securely.
+-   Facilitates **JWT (JSON Web Token) issuance** upon user registration/login for application-specific authentication.
+-   Includes **middleware for JWT and API Key based authentication**, allowing you to protect your service endpoints with flexible access control (e.g., requiring **EITHER** a valid JWT **OR** an API Key for certain routes).
 
-- Database connection initialized using GORM ORM
-- Reads database config (host, port, user, password, SSL mode) from environment variables
-- Connection health checked on startup
-- Graceful shutdown closes DB connection properly
+#### 6. Graceful Shutdown
+-   All generated services are equipped with **graceful shutdown** logic, ensuring that HTTP servers and database connections are closed cleanly upon receiving `SIGINT` (Ctrl+C) or `SIGTERM` signals, preventing data corruption and resource leaks.
 
-### 4. HTTP Server with Gorilla Mux
-
-- Sets up HTTP routing with [`gorilla/mux`](https://github.com/gorilla/mux)
-- Automatically registers user-defined routes and controllers
-- Includes CORS middleware to handle cross-origin requests and OPTIONS preflight
-
-### 5. Graceful Shutdown
-
-- Listens for system signals (`SIGINT`, `SIGTERM`)
-- Shuts down HTTP server and closes database connections cleanly to avoid resource leaks
-
-### 6. Docker Multi-stage Build
-
-- Optimized Dockerfile that compiles a static Go binary in a lightweight Alpine image
-- Copies all necessary source and shared packages for reproducible builds
-- Exposes and configures service port via environment variable
-
-### 7. Ready-to-use REST, GraphQL, or gRPC API
-
-- Choose API type interactively during generation
-- Generates boilerplate for chosen API style with controllers and routes
+#### 7. Docker Multi-stage Build 🐳
+-   Each generated service includes an **optimized Dockerfile** utilizing multi-stage builds.
+-   This compiles a statically linked Go binary in a build stage (using `golang:alpine`) and copies it into a tiny `scratch` image for the final production container, resulting in extremely small and secure Docker images.
+-   Essential runtime components like **CA certificates** are copied to enable secure outgoing connections.
+-   Service ports and other configurations are managed via environment variables within the Docker image, allowing easy deployment configuration.
 
 ---
 

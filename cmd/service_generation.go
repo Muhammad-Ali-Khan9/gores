@@ -2,30 +2,25 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
 )
 
-// TemplateData passed to templates for rendering.
 type TemplateData struct {
 	Name    string
 	Port    string
 	RootDir string
 }
 
-// createAuthMicroservice scaffolds the 'auth-service' specific folders and files
-// from templates located exclusively in "templates/auth/".
-func createAuthMicroservice(name = "Auth", port string) error {
+func createAuthMicroservice(name, port string) error {
 	const templateRoot = "templates/auth/" // Hardcoded path for auth templates
 
 	serviceDirPath := filepath.Join("services", name)
 	internalDirPath := filepath.Join(serviceDirPath, "src/internal")
 	cmdDirPath := filepath.Join(serviceDirPath, "src/cmd")
 
-	// Create base service directory and internal/cmd subdirectories
 	foldersToCreate := []string{
 		serviceDirPath,
 		internalDirPath,
@@ -45,7 +40,7 @@ func createAuthMicroservice(name = "Auth", port string) error {
 		"service.tmpl":    filepath.Join(internalDirPath, "service.go"),
 		"go.mod.tmpl":     filepath.Join(serviceDirPath, "go.mod"),
 		"Dockerfile.tmpl": filepath.Join(serviceDirPath, "Dockerfile"),
-		"entity.tmpl": filepath.Join("pkg", "entities", fmt.Sprintf("user.entity.go", name)),
+		"entity.tmpl": filepath.Join("pkg", "entities", "user.entity.go"),
 	}
 
 	cwd, err := os.Getwd()
@@ -105,9 +100,6 @@ func createAuthMicroservice(name = "Auth", port string) error {
 	return nil
 }
 
-// createSharedPkg creates common shared folders (pkg/entities, pkg/database, pkg/http/middleware)
-// and their corresponding files from embedded templates.
-// It uses the global 'templatesFS' variable (defined in cmd/generate.go).
 func createSharedPkg() error {
 	pkgPath := "pkg"
 	if _, err := os.Stat(pkgPath); os.IsNotExist(err) {
@@ -234,22 +226,19 @@ func createSharedPkg() error {
 		if err != nil {
 			return fmt.Errorf("failed to execute middleware template: %w", err)
 		}
-		fmt.Println("pkg/http/middleware/middleware.go created.")
+		fmt.Println("pkg/http/middleware.go created.")
 	} else {
-		fmt.Println("pkg/http/middleware/middleware.go already exists, skipping creation.")
+		fmt.Println("pkg/http/middleware.go already exists, skipping creation.")
 	}
 
 	return nil
 }
 
-// createMicroservice scaffolds microservice folders and files from embedded templates.
-// It uses the global templatesFS variable and now accepts the specific template directory.
 func createMicroservice(name, port, templateRoot string) error {
 	serviceDirPath := filepath.Join("services", name)
 	internalDirPath := filepath.Join(serviceDirPath, "internal")
 	cmdDirPath := filepath.Join(serviceDirPath, "cmd")
 
-	// Create base service directory and internal/cmd subdirectories
 	foldersToCreate := []string{
 		serviceDirPath,
 		internalDirPath,
@@ -262,8 +251,6 @@ func createMicroservice(name, port, templateRoot string) error {
 		}
 	}
 
-	// Map of template file names to their target output paths
-	// The key is the template name relative to templateRoot
 	templates := map[string]string{
 		"main.tmpl":       filepath.Join(cmdDirPath, "main.go"),
 		"router.tmpl":     filepath.Join(internalDirPath, "router.go"),

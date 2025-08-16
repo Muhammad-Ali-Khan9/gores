@@ -54,9 +54,9 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("failed to create shared pkg: %w", err)
 		}
 
-		if serviceExists(authServiceName) { // Call from port_management.go
+		if ServiceExists(authServiceName) { // Call from port_management.go
 			fmt.Printf("Auth service '%s' already exists, skipping generation.\n", authServiceName)
-			if err := writeUsedPortForService(8080, authServiceName, usedPortsFile); err != nil { // Call from port_management.go
+			if err := WriteUsedPortForService(8080, authServiceName, usedPortsFile); err != nil { // Call from port_management.go
 				return fmt.Errorf("failed to ensure auth service port is registered: %w", err)
 			}
 		} else {
@@ -64,7 +64,7 @@ var initCmd = &cobra.Command{
 			if err := createAuthMicroservice(authServiceName, authServicePort); err != nil {
 				return fmt.Errorf("failed to generate auth service: %w", err)
 			}
-			if err := writeUsedPortForService(8080, authServiceName, usedPortsFile); err != nil {
+			if err := WriteUsedPortForService(8080, authServiceName, usedPortsFile); err != nil {
 				return fmt.Errorf("failed to record auth service port: %w", err)
 			}
 		}
@@ -143,12 +143,12 @@ var generateCmd = &cobra.Command{
 			}
 
 			// Check if the user-provided port is already used or occupied (delegated to port_management.go).
-			usedPorts, err := readUsedPorts(usedPortsFile) // Call from port_management.go
+			usedPorts, err := ReadUsedPorts(usedPortsFile) // Call from port_management.go
 			if err != nil {
 				return fmt.Errorf("failed to read used ports file: %w", err)
 			}
 
-			if isPortUsed(usedPorts, port) { // Call from port_management.go
+			if IsPortUsed(usedPorts, port) { // Call from port_management.go
 				return fmt.Errorf("the port '%d' is already assigned to another service", port)
 			}
 
@@ -158,7 +158,7 @@ var generateCmd = &cobra.Command{
 			if err == nil { // Port is free at OS level
 				l.Close()
 				// Store the user-provided port with the service name (delegated to port_management.go).
-				err = writeUsedPortForService(port, serviceName, usedPortsFile) // Call from port_management.go
+				err = WriteUsedPortForService(port, serviceName, usedPortsFile) // Call from port_management.go
 				if err != nil {
 					return fmt.Errorf("failed to store user-provided port: %w", err)
 				}
@@ -171,7 +171,7 @@ var generateCmd = &cobra.Command{
 			startPort := 8080                    // Starting port for auto-assignment.
 			nextPortFile := "next_available_port.txt" // File to store the next suggested port
 
-			p, err := readAndIncrementPortWithUsed(startPort, serviceName, nextPortFile, usedPortsFile) // Call from port_management.go
+			p, err := ReadAndIncrementPortWithUsed(startPort, serviceName, nextPortFile, usedPortsFile) // Call from port_management.go
 			if err != nil {
 				return fmt.Errorf("failed to get next available port: %w", err)
 			}
@@ -204,7 +204,7 @@ var listServicesCmd = &cobra.Command{
 
 		usedPortsFile := "used_ports.json"
 
-		usedPorts, err := readUsedPorts(usedPortsFile) // Call from port_management.go
+		usedPorts, err := ReadUsedPorts(usedPortsFile) // Call from port_management.go
 		if err != nil {
 			if os.IsNotExist(err) { // More precise check for file not found
 				fmt.Println("No services have been generated yet (used_ports.json not found).")
