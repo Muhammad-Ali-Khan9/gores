@@ -4,17 +4,16 @@ import (
 	"context"
 	"flag"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/gofiber/fiber/v2" // Import Fiber
 	"github.com/joho/godotenv"
 
-	"pkg/http"
-	"pkg/database/postgres"
+	// You'll need to replace these with your actual package paths.
+	"pkg/database/postgres" 
 	"src/internal"
 	"pkg/entities"
 )
@@ -43,16 +42,13 @@ func main() {
 	service := internal.NewUserService(db, entityModel)
 	controller := internal.NewUserController(service)
 
-	// Setup router
-	r := mux.NewRouter()
-	internal.RegisterUserRoutes(r, controller)
+	// --- Initialize Fiber and enable Prefork ---
+	app := fiber.New(fiber.Config{
+		Prefork: true, // This enables prefork for load balancing
+	})
 
-	// Setup HTTP server with CORS middleware
-	addr := ":" + *port
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: http.WithCORS(r),
-	}
+	// Setup router (assumes a new RegisterUserRoutes that accepts *fiber.App)
+	internal.RegisterUserRoutes(app, controller)
 
 	// Channel to listen for OS signals
 	stop := make(chan os.Signal, 1)
@@ -60,9 +56,10 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
+		addr := ":" + *port
 		log.Printf("Service running on %s\n", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+		if err := app.Listen(addr); err != nil {
+			log.Fatalf("Fiber Listen error: %v", err)
 		}
 	}()
 
@@ -70,12 +67,8 @@ func main() {
 	<-stop
 	log.Println("Shutting down server...")
 
-	// Context for graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	// Shutdown server
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := app.Shutdown(); err != nil {
 		log.Fatalf("Server shutdown failed: %v", err)
 	}
 

@@ -1,0 +1,35 @@
+{{/*
+  templates/config/consul_config.tmpl
+  This template generates code for initializing and managing dynamic configuration
+  via HashiCorp Consul's Key-Value store. It sets up initial config loading
+  and a background goroutine to watch for changes.
+
+  Assumes:
+  - appConfig struct is defined in pkg/config.
+  - Required Consul client import: "github.com/hashicorp/consul/api"
+  - Environment variable CONSUL_ADDR is set (e.g., "127.0.0.1:8500").
+  - `fetchAndSetConsulConfigs` and `watchConsulConfig` functions exist in pkg/config.
+*/}}
+	log.Println("Initializing dynamic configuration from Consul...")
+	consulAddress := os.Getenv("CONSUL_ADDR")
+	if consulAddress == "" {
+		log.Fatal("CONSUL_ADDR environment variable is not set for Consul dynamic config.")
+	}
+
+	consulConfig := api.DefaultConfig()
+	consulConfig.Address = consulAddress
+	consulClient, err := api.NewClient(consulConfig)
+	if err != nil {
+		log.Fatalf("Failed to create Consul client: %v", err)
+	}
+
+	// Initial configuration load from Consul
+	if err := config.FetchAndSetConsulConfigs(consulClient, "{{.Name | lower}}-service"); err != nil {
+		log.Fatalf("Failed initial configuration load from Consul: %v", err)
+	}
+	log.Println("Initial configuration loaded from Consul.")
+
+	// Start a background goroutine to watch for configuration changes
+	go config.WatchConsulConfig(consulClient, "{{.Name | lower}}-service")
+
+	// Use config.GetConfig() to access live configuration values throughout the application.

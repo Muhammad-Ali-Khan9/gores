@@ -1,17 +1,18 @@
 package cmd
 
 import (
-	"embed"      // For embedding templates
+	"embed"
+
 	"fmt"
-	"net"        // For checking port availability in generateCmd
+	"net"
 	"os"
-	"path/filepath" // For path manipulation
-	"strconv"    // For string to int conversion
+	"path/filepath"
+	"strconv"
+	"os/exec"
 
 	"github.com/spf13/cobra"
 )
 
-// CustomError is a simple wrapper for errors, useful for consistent error handling.
 type CustomError struct {
 	Err error
 }
@@ -226,9 +227,93 @@ var listServicesCmd = &cobra.Command{
 	},
 }
 
+// modTidyAllCmd is the new Cobra command to run 'go mod tidy' in the pkg/ and all service directories.
+var modTidyAllCmd = &cobra.Command{
+	Use:   "mod-tidy-all",
+	Short: "Runs 'go mod tidy' in pkg/ and all generated service directories",
+	Long:  "Executes 'go mod tidy' in the 'pkg/' folder and then in each subdirectory within the 'services/' folder, ensuring all module dependencies are clean.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Println("Running 'go mod tidy' across the monorepo...")
+
+		originalDir, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current working directory: %w", err)
+		}
+		// Ensure we always return to the original directory at the end
+		defer func() {
+			if cerr := os.Chdir(originalDir); cerr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to change back to original directory '%s': %v\n", originalDir, cerr)
+			}
+		}()
+
+		// 1. Run 'go mod tidy' in the pkg/ directory
+		pkgDir := filepath.Join(originalDir, "pkg") // Construct full path to pkg/
+		if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
+			fmt.Printf("No 'pkg/' directory found, skipping 'go mod tidy' for pkg.\n")
+		} else if err != nil {
+			return fmt.Errorf("failed to check 'pkg/' directory: %w", err)
+		} else {
+			fmt.Printf("\nRunning 'go mod tidy' in: %s\n", pkgDir)
+			if err := runGoModTidy(pkgDir); err != nil { // Run in pkgDir
+				fmt.Fprintf(os.Stderr, "Error: Failed to run 'go mod tidy' in 'pkg/': %v\n", err)
+				// Continue, but log the error
+			}
+		}
+
+		// 2. Iterate through 'services/' directory and run 'go mod tidy' in each service
+		servicesDir := "services"
+		serviceFolders, err := os.ReadDir(servicesDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Printf("No 'services/' directory found, skipping service-specific tidy.\n")
+				// No error if services directory doesn't exist yet, just means nothing to tidy
+				return nil
+			}
+			return fmt.Errorf("failed to read 'services/' directory: %w", err)
+		}
+
+		for _, entry := range serviceFolders {
+			if entry.IsDir() {
+				servicePath := filepath.Join(servicesDir, entry.Name())
+				fmt.Printf("\nRunning 'go mod tidy' in: %s\n", servicePath)
+
+				// Change to service directory
+				if err := os.Chdir(servicePath); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Failed to change to service directory '%s': %v\n", servicePath, err)
+					continue // Continue to next service
+				}
+
+				// Run go mod tidy in the service directory
+				if err := runGoModTidy("."); err != nil {
+					fmt.Fprintf(os.Stderr, "Error: Failed to run 'go mod tidy' in '%s': %v\n", servicePath, err)
+					// Optionally, you might want to stop here or collect all errors
+				}
+
+				// Change back to original directory (handled by defer, but good practice for clarity in loop)
+				if err := os.Chdir(originalDir); err != nil {
+					return fmt.Errorf("failed to change back to original directory after processing '%s': %w", servicePath, err)
+				}
+			}
+		}
+
+		fmt.Println("\n'go mod tidy' completed across all relevant directories. ✨")
+		return nil
+	},
+}
+
+// runGoModTidy executes the 'go mod tidy' command in the specified directory.
+func runGoModTidy(dir string) error {
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = dir // Set the working directory for the command
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // init function to add commands to the root command.
 func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(listServicesCmd)
+	rootCmd.AddCommand(modTidyAllCmd)
 }
