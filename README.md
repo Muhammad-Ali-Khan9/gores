@@ -84,7 +84,7 @@ Your generated service will adhere to common Go project layout recommendations:
 If you have Go installed, you can directly install the CLI tool using:
 
 ```bash
-go install github.com/Muhammad-Ali-Khan9/gores/cmd@latest
+go install github.com/Muhammad-Ali-Khan9/gores@v1.4.25
 ```
 
 This will compile and install the gores executable in your $GOPATH/bin or $HOME/go/bin directory.
